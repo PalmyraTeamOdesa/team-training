@@ -1,0 +1,13 @@
+{
+  "name": "team-training",
+  "version": "1.0.0",
+  "private": true,
+  "description": "TRITON Triathlon Team — training app (PWA + Supabase)",
+  "scripts": {
+    "build": "node build.mjs"
+  },
+  "devDependencies": {
+    "@supabase/supabase-js": "2.119.2",
+    "esbuild": "0.28.2"
+  }
+}
