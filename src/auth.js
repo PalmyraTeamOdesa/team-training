@@ -15,8 +15,10 @@ function parseInviteHash(){
 function inAppHintHtml(){
  if(typeof instInfo!=='function')return '';
  const i=instInfo();if(!(i.inApp||(i.iOS&&!i.iosSafari)))return '';
- const tg=/Telegram/i.test(navigator.userAgent||'');const where=i.iOS?'Safari':'Chrome';
- return `<div class="note" style="text-align:left">${ic('phone',20)}<span><b>${tg?'Ви у браузері Telegram':'Ви відкрили посилання всередині іншої програми'}.</b> Щоб потім встановити TRITON на екран, відкрийте це посилання в ${where}.</span></div>
+ const tg=/Telegram/i.test(navigator.userAgent||'');
+ if(i.iOS)return `<div class="note" style="text-align:left">${ic('phone',20)}<span><b>${tg?'Ви у браузері Telegram':'Відкрийте TRITON у Safari'}.</b> На iPhone і iPad додати на екран Додому можна лише в Safari.</span></div>
+  <div class="row" style="gap:8px;flex-wrap:wrap"><button class="btn p grow" onclick="instOpenSafari()">${ic('link',18)} Відкрити в Safari</button><button class="btn s grow" onclick="instCopySafari()">${ic('copy',18)} Скопіювати посилання</button></div>`;
+ return `<div class="note" style="text-align:left">${ic('phone',20)}<span><b>${tg?'Ви у браузері Telegram':'Ви відкрили посилання всередині іншої програми'}.</b> Щоб потім встановити TRITON на екран, відкрийте це посилання в Chrome.</span></div>
   <div class="row" style="gap:8px;flex-wrap:wrap"><button class="btn s grow" onclick="instCopyLink()">${ic('copy',18)} Скопіювати посилання</button>${i.android?`<button class="btn s grow" onclick="instOpenChrome()">${ic('link',18)} Відкрити в Chrome</button>`:''}</div>`;
 }
 st.authMode='login';
@@ -61,11 +63,12 @@ async function startSession(session){
  if(!st.me){st.screen='auth';render();return}
  if(st.me.status==='blocked'&&!st.coach){st._authMsg='Доступ до команди закрито адміністратором.';await sb.auth.signOut();return}
  if(!st.coach&&!st.me.onboarded){startOnb();return}
- if(!st.coach&&st.me.status!=='active'){st.screen='wait';render();if(typeof navWrite==='function')navWrite(true);waitPoll();return}
+ if(!st.coach&&st.me.status!=='active'){st.screen='wait';render();if(typeof navWrite==='function')navWrite(true);waitPoll();if(typeof maybeOfferInstall==='function')setTimeout(maybeOfferInstall,500);return}
  st.screen='app';if(st.coach)st.ctab='team';render();subscribeLive();
  if(typeof navBoot==='function')navBoot();
  if(location.hash==='#recovery')openSheet('password');
- if(st._justApproved){st._justApproved=false;if(typeof maybeOfferInstall==='function')setTimeout(maybeOfferInstall,400)}
+ if(st._justApproved)st._justApproved=false;
+ if(typeof maybeOfferInstall==='function')setTimeout(maybeOfferInstall,400);
 }
 function waitView(){return `<main><div class="stack" style="padding-top:72px;text-align:center">${inAppHintHtml()}<div class="okcircle" style="margin:0 auto">${ic('clock',28)}</div><div class="t28">Заявку надіслано</div><div class="t14 sec">Тренер ще не підтвердив вашу участь. Поки що в застосунку нічого не відкрито: після підтвердження зʼявляться ваш план і команда.</div><button class="btn s" onclick="waitCheck(this)">Перевірити статус</button><button class="btn t" onclick="logout()">Вийти</button></div></main>`}
 let _wt=null;function waitPoll(){clearInterval(_wt);_wt=setInterval(()=>{if(st.screen!=='wait'){clearInterval(_wt);return}waitCheck(null,true)},30000)}

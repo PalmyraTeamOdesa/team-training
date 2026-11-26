@@ -58,14 +58,18 @@ async function togglePriv(btn){await busy(btn,async()=>{me().hide=!me().hide;awa
 /* ---------- INSTALL TO HOME SCREEN ---------- */
 const INST_KEY='triton_inst_hide',INST_DAYS=7;
 function instStandalone(){return !!(window.matchMedia('(display-mode: standalone)').matches||window.matchMedia('(display-mode: fullscreen)').matches||window.matchMedia('(display-mode: minimal-ui)').matches||navigator.standalone)}
+function instIsIpad(){const ua=navigator.userAgent||'';return /iPad/.test(ua)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1)}
 function instInfo(){
  const ua=navigator.userAgent||'';
  const iOS=/iPad|iPhone|iPod/.test(ua)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
+ const iPad=iOS&&instIsIpad();
  const android=/Android/i.test(ua);
  const inApp=/FBAN|FBAV|FB_IAB|Instagram|Line\/|Twitter|TikTok|Snapchat|Telegram|; wv\)|WebView/i.test(ua)||(android&&/Version\/[\d.]+/.test(ua)&&/Chrome\//.test(ua)&&/\bwv\b/.test(ua));
  const iosSafari=iOS&&/Safari/i.test(ua)&&/Version\//i.test(ua)&&!/CriOS|FxiOS|EdgiOS|OPiOS|DuckDuckGo|YaBrowser|EdgA/i.test(ua)&&!/Instagram|FBAN|FBAV|Line\/|Telegram|Twitter/i.test(ua);
- return {iOS,android,inApp,iosSafari,standalone:instStandalone(),canPrompt:!!window._installEvt};
+ return {iOS,iPad,android,inApp,iosSafari,standalone:instStandalone(),canPrompt:!!window._installEvt};
 }
+function instMarkDevice(){try{const i=instInfo();document.documentElement.classList.toggle('is-ios',!!i.iOS);document.documentElement.classList.toggle('is-ipad',!!i.iPad)}catch(e){}}
+instMarkDevice();
 function instDismissed(){const t=parseInt(localStorage.getItem(INST_KEY)||'0',10);return t&&(Date.now()-t)<INST_DAYS*864e5}
 function instShouldBanner(){if(instStandalone()||instDismissed()||st._instSkip||st.screen!=='app')return false;const i=instInfo();return i.canPrompt||i.iOS||i.inApp||i.android}
 function instDismiss(){localStorage.setItem(INST_KEY,String(Date.now()));const b=$('#instbar');if(b)b.remove()}
@@ -74,13 +78,13 @@ function instBannerHtml(){
  if(!instShouldBanner())return '';
  const i=instInfo();let title,sub,action,label;
  if(i.canPrompt){title='Встановити на екран';sub='Швидкий доступ, як застосунок';action='instInstall(this)';label='Встановити'}
- else if(i.iOS&&!i.iosSafari){title='Відкрийте в Safari';sub='Щоб додати на екран Додому';action="openSheet('phome')";label='Як встановити'}
+ else if(i.iOS&&!i.iosSafari){title='Відкрийте в Safari';sub='Тут не вийде додати на екран Додому';action='instOpenSafari()';label='Відкрити в Safari'}
  else if(i.iOS){title='На екран Додому';sub='Safari → Поділитися → На екран Додому';action="openSheet('phome')";label='Показати як'}
  else if(i.inApp){title='Відкрийте в Chrome';sub='Тут встановити не вийде';action="openSheet('phome')";label='Як встановити'}
  else {title='Встановити на екран';sub='Працює як застосунок';action="openSheet('phome')";label='Як встановити'}
  return `<div class="instbar" id="instbar" role="region" aria-label="Встановити на екран"><span class="instico">${ic('phone',20)}</span><div class="grow"><div class="t14 w6 ell">${title}</div><div class="t12 sec ell">${sub}</div></div><button class="btn sm p instcta" onclick="${action}">${label}</button><button class="ib instx" onclick="instDismiss()" aria-label="Закрити">${ic('x',18)}</button></div>`;
 }
-function instMenuRow(){if(instStandalone())return null;const i=instInfo();const sub=i.canPrompt?'Працює як застосунок, без браузера':i.iOS&&!i.iosSafari?'Відкрийте посилання в Safari':i.iOS?'Поділитися → На екран Додому':i.inApp?'Відкрийте сторінку в Chrome':'Працює як застосунок';return ['phone','Встановити на екран',sub,i.canPrompt?'inst':'phome']}
+function instMenuRow(){if(instStandalone())return null;const i=instInfo();const sub=i.canPrompt?'Працює як застосунок, без браузера':i.iOS&&!i.iosSafari?'Відкрити в Safari':i.iOS?'Поділитися → На екран Додому':i.inApp?'Відкрийте сторінку в Chrome':'Працює як застосунок';return ['phone','Встановити на екран',sub,i.canPrompt?'inst':'phome']}
 async function instInstall(btn){
  const ev=window._installEvt;
  if(!ev||typeof ev.prompt!=='function'){openSheet('phome');return}
@@ -97,13 +101,47 @@ async function instInstall(btn){
  }catch(e){fallback()}
 }
 function instOnInstalled(){window._installEvt=null;st._instSkip=true;const b=$('#instbar');if(b)b.remove();toast('Застосунок встановлено');if(sheetStack.some(s=>s.name==='phome'||s.name==='profile'))closeAll()}
-function instCopyLink(){const url=location.href.split('#')[0];const done=()=>toast('Посилання скопійовано','link');if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(url).then(done).catch(()=>instCopyFallback(url,done));else instCopyFallback(url,done)}
+function instPageUrl(){return location.href}
+function instCopyLink(){const url=instPageUrl();const done=()=>toast('Посилання скопійовано','link');if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(url).then(done).catch(()=>instCopyFallback(url,done));else instCopyFallback(url,done)}
 function instCopyFallback(url,done){const t=document.createElement('textarea');t.value=url;t.setAttribute('readonly','');t.style.position='fixed';t.style.left='-9999px';document.body.appendChild(t);t.select();try{document.execCommand('copy');done()}catch(e){toast(url,'link')}t.remove()}
+function instCopySafari(){const url=instPageUrl();const done=()=>toast('Посилання скопійовано. Відкрийте Safari і вставте його в адресний рядок.','link');if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(url).then(done).catch(()=>instCopyFallback(url,done));else instCopyFallback(url,done)}
+function instOpenSafari(){
+ const href=instPageUrl();
+ if(!/^https?:\/\//i.test(href)){instCopySafari();return}
+ const scheme=href.replace(/^https:\/\//i,'x-safari-https://').replace(/^http:\/\//i,'x-safari-http://');
+ let left=false;
+ const to=setTimeout(()=>{if(!left&&!document.hidden)instCopySafari()},900);
+ const onVis=()=>{if(document.hidden){left=true;clearTimeout(to);document.removeEventListener('visibilitychange',onVis)}};
+ document.addEventListener('visibilitychange',onVis);
+ try{if(typeof window.__setHref==='function')window.__setHref(scheme);else location.href=scheme}catch(e){clearTimeout(to);document.removeEventListener('visibilitychange',onVis);instCopySafari()}
+}
 function instOpenChrome(){const u=new URL(location.href.split('#')[0]);location.href=`intent://${u.host}${u.pathname}${u.search}#Intent;scheme=https;package=com.android.chrome;S.browser_fallback_url=${encodeURIComponent(u.href)};end`}
-function instStepsIos(){return `<div class="inst-steps">
- <div class="inst-step"><span class="inst-num">1</span><div class="grow"><div class="t16">Натисніть «Поділитися»</div><div class="t14 sec">Кнопка внизу екрана Safari, на iPad — вгорі</div></div><span class="inst-glyph" aria-hidden="true">${ic('iosshare',26)}</span></div>
- <div class="inst-step"><span class="inst-num">2</span><div class="grow"><div class="t16">Оберіть «На екран Додому»</div><div class="t14 sec">Прокрутіть список дій, якщо не бачите одразу, потім «Додати»</div></div><span class="inst-glyph" aria-hidden="true">${ic('homeplus',26)}</span></div>
-</div>`}
+function instIllShare(){return `<div class="inst-ill share" aria-hidden="true"><div class="ill-btn">${ic('iosshare',36)}</div><div class="ill-lbl">Поділитися</div></div>`}
+function instIllHome(){return `<div class="inst-ill home" aria-hidden="true"><div class="ill-row">${ic('homeplus',28)}<span>На екран Додому</span></div></div>`}
+function instIllAdd(){return `<div class="inst-ill add" aria-hidden="true"><div class="ill-add">Додати</div></div>`}
+function instStepsIos(){const pad=instIsIpad();
+ return `<div class="inst-visual" aria-label="Як додати на екран Додому">
+  <div class="inst-vis">${instIllShare()}<div class="inst-vis-cap"><span class="inst-num">1</span><div><div class="t16 w6">Поділитися</div><div class="t14 sec">${pad?'Кнопка вгорі справа в Safari':'Кнопка внизу по центру в Safari'}</div></div></div></div>
+  <div class="inst-vis-arr" aria-hidden="true">→</div>
+  <div class="inst-vis">${instIllHome()}<div class="inst-vis-cap"><span class="inst-num">2</span><div><div class="t16 w6">На екран Додому</div><div class="t14 sec">Прокрутіть список, якщо пункту не видно</div></div></div></div>
+  <div class="inst-vis-arr" aria-hidden="true">→</div>
+  <div class="inst-vis">${instIllAdd()}<div class="inst-vis-cap"><span class="inst-num">3</span><div><div class="t16 w6">Додати</div><div class="t14 sec">Підтвердіть у правому верхньому куті</div></div></div></div>
+ </div>`}
+function instShareArrowHtml(){const pad=instIsIpad();
+ return `<div id="sharehint" class="sharehint ${pad?'ipad':'iphone'}" aria-hidden="true">
+  <div class="sharehint-label">Тут · Поділитися</div>
+  <svg class="sharehint-arrow" viewBox="0 0 64 80" width="56" height="70" fill="none"><path d="M32 8v52" stroke="currentColor" stroke-width="8" stroke-linecap="round"/><path d="M12 42 32 68 52 42" stroke="currentColor" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+ </div>`}
+function instUnmountShareArrow(){const e=$('#sharehint');if(e)e.remove()}
+function instSyncShareArrow(){
+ instUnmountShareArrow();
+ const top=sheetStack[sheetStack.length-1];
+ const i=typeof instInfo==='function'?instInfo():{};
+ if(!top||top.name!=='phome'||!i.iOS||!i.iosSafari||i.standalone)return;
+ const host=$('.phone')||document.body;
+ host.insertAdjacentHTML('beforeend',instShareArrowHtml());
+ instMarkDevice();
+}
 function instStepsAndroid(){return `<div class="inst-steps" id="inst-android-steps">
  <div class="inst-step"><span class="inst-num">1</span><div class="grow"><div class="t16">Відкрийте меню Chrome ⋮</div><div class="t14 sec">Три крапки вгорі справа</div></div></div>
  <div class="inst-step"><span class="inst-num">2</span><div class="grow"><div class="t16">Оберіть «Додати на головний екран» або «Встановити додаток»</div><div class="t14 sec">Назва пункту залежить від версії Chrome</div></div></div>
@@ -117,10 +155,11 @@ SHEETS.phome=()=>{
  const i=instInfo();const logo=window.__LOGO?`<img class="logoimg" src="icons/logo-256.png" alt="" width="64" height="64" style="width:64px;height:64px">`:`<div class="logo" style="width:64px;height:64px;font-size:28px">T</div>`;
  let body=`<div class="stack"><div class="center s8">${logo}<div class="t16">TRITON Team на екрані Додому</div></div>`;
  if(i.canPrompt)body+=`<button class="btn p" id="inst-prompt-btn" onclick="instInstall(this)">${ic('phone',20)} Встановити на екран</button><div class="t14 sec">Після встановлення застосунок відкриватиметься без рядка браузера. Якщо вікно Chrome не з’явилось — зробіть це вручну:</div>${instStepsAndroid()}`;
- else if(i.iOS&&!i.iosSafari)body+=`<div class="card s8"><div class="t16">Відкрийте посилання в Safari</div><div class="t14 sec">Chrome, Telegram та інші програми на iPhone не вміють додавати на екран Додому. Скопіюйте посилання, відкрийте Safari і вставте його в адресний рядок.</div></div>
-  <button class="btn p" onclick="instCopyLink()">${ic('copy',20)} Скопіювати посилання</button>
-  ${instStepsIos()}`;
- else if(i.iOS)body+=`<div class="t14 sec">Safari не показує кнопку встановлення. Додайте застосунок так:</div>${instStepsIos()}`;
+ else if(i.iOS&&!i.iosSafari)body+=`<div class="card s8"><div class="t16">Відкрийте в Safari</div><div class="t14 sec">Telegram, Instagram, Chrome та інші програми на iPhone не вміють додавати на екран Додому. Відкрийте це посилання в Safari — там два кроки: Поділитися → На екран Додому.</div></div>
+  <button class="btn p" onclick="instOpenSafari()">${ic('link',20)} Відкрити в Safari</button>
+  <button class="btn s" onclick="instCopySafari()">${ic('copy',20)} Скопіювати посилання</button>
+  <div class="t12 ter">Якщо кнопка не відкрила Safari — скопіюйте посилання, відкрийте Safari і вставте його в адресний рядок.</div>`;
+ else if(i.iOS)body+=`<div class="t16 w6">Додайте на екран Додому за два кроки</div><div class="t14 sec">Стрілка вказує на кнопку «Поділитися» в Safari.${i.iPad?' На iPad вона вгорі справа.':' На iPhone вона внизу по центру.'}</div>${instStepsIos()}`;
  else if(i.inApp)body+=`<div class="card s8"><div class="t16">${/Telegram/i.test(navigator.userAgent||'')?'Відкрийте посилання в Chrome, не в Telegram':'Відкрийте сторінку в Chrome'}</div><div class="t14 sec">У Telegram, Instagram та подібних програмах встановити застосунок не вийде. Відкрийте це посилання в Chrome — там з’явиться пропозиція встановити, або меню ⋮ → «Додати на головний екран».</div></div>
   <button class="btn p" onclick="instCopyLink()">${ic('copy',20)} Скопіювати посилання</button>
   <button class="btn s" onclick="instOpenChrome()">${ic('link',20)} Відкрити в Chrome</button>`;

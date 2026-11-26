@@ -60,14 +60,18 @@ function closeSheet(){if(_navPop){sheetStack.pop();_sheetDepth=Math.max(0,_sheet
 function closeAll(){sheetStack=[];_sheetDepth=0;renderSheet();if(!_navPop&&typeof navWrite==='function')navWrite(true)}
 function replaceSheet(name,arg){if(!sheetStack.length)sheetStack.push({name,arg});else sheetStack[sheetStack.length-1]={name,arg};renderSheet(true);if(typeof navWrite==='function')navWrite(true)}
 function renderSheet(fresh){
- const scrim=$('#scrim');if(!scrim)return;if(!sheetStack.length){scrim.classList.remove('open');setTimeout(()=>{if(!sheetStack.length)scrim.innerHTML=''},200);return}
+ const scrim=$('#scrim');if(!scrim){if(typeof instSyncShareArrow==='function')instSyncShareArrow();return}
+ if(!sheetStack.length){scrim.classList.remove('open');setTimeout(()=>{if(!sheetStack.length)scrim.innerHTML=''},200);if(typeof instSyncShareArrow==='function')instSyncShareArrow();return}
  const top=sheetStack[sheetStack.length-1];let s;try{s=SHEETS[top.name](top.arg)}catch(e){console.error(e);s={title:'Помилка',body:`<div class="empty">Не вдалося відкрити</div>`}}
  const old=scrim.querySelector('.sh-body');const sc=(!fresh&&old)?old.scrollTop:0;
  const back=sheetStack.length>1;
- scrim.innerHTML=`<div class="sheet ${s.full?'full':''}" onclick="event.stopPropagation()"><div class="grab"></div>
+ const i=typeof instInfo==='function'?instInfo():{};
+ const iosGap=top.name==='phome'&&i.iOS&&i.iosSafari&&!i.standalone&&!i.iPad;
+ scrim.innerHTML=`<div class="sheet ${s.full?'full':''}${iosGap?' ios-install-phone':''}" onclick="event.stopPropagation()"><div class="grab"></div>
   <div class="sh-head ${back?'back':''}">${back?`<button class="ib" onclick="closeSheet()" aria-label="Назад">${ic('back',22)}</button>`:''}<h2 class="ell">${s.title}</h2>${s.headR||''}<button class="ib" onclick="closeAll()" aria-label="Закрити">${ic('x',22)}</button></div>
   <div class="sh-body">${s.body}</div>${s.foot?`<div class="sh-foot">${s.foot}</div>`:''}</div>`;
  scrim.classList.add('open');const nb=scrim.querySelector('.sh-body');if(nb)nb.scrollTop=sc;
+ if(typeof instSyncShareArrow==='function')instSyncShareArrow();
 }
 function toast(t,icon){const el=$('#toast');el.innerHTML=ic(icon||'check',20)+'<span>'+esc(t)+'</span>';el.classList.add('show');clearTimeout(toast._t);toast._t=setTimeout(()=>el.classList.remove('show'),2800)}
 function fail(e,t){console.error(e);toast(t||('Помилка: '+((e&&e.message)||e)),'alert')}

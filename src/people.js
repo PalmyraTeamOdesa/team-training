@@ -91,9 +91,9 @@ async function prSave(btn){const pr=st._pr;await busy(btn,async()=>{D(await sb.r
 function openInvite(){st._inv=st._inv||{coach:new Set(),member:new Set()};st._pr=st._inv;openSheet('invite')}
 function inviteBase(){return (location.origin+location.pathname).replace(/index\.html$/,'')}
 function inviteUrl(){const inv=st._inv||st._pr||{member:new Set(),coach:new Set()};const m=[...inv.member],c=[...inv.coach];let h='#i';if(m.length||c.length){h='#i='+m.join(',');if(c.length)h+='&c='+c.join(',')}return inviteBase()+h}
-function inviteText(){return 'Запрошую до команди TRITON (Одеса). Зареєструйтесь за посиланням — тренер підтвердить участь.'}
+function inviteText(){return 'Запрошую до команди TRITON (Одеса). Зареєструйтесь за посиланням — тренер підтвердить участь. На iPhone відкрийте в Safari.'}
 SHEETS.invite=()=>{st._pr=st._inv||(st._inv={coach:new Set(),member:new Set()});const url=inviteUrl();const canShare=typeof navigator.share==='function';
- return {title:'Запросити за посиланням',body:`<div class="stack"><div class="t14 sec">Надішліть посилання в Telegram. Людина реєструється, заповнює анкету і зʼявляється у «Нові заявки». Підтвердження — лише вами, не автоматично.</div>
+ return {title:'Запросити за посиланням',body:`<div class="stack"><div class="t14 sec">Надішліть посилання в Telegram. Людина реєструється, заповнює анкету і зʼявляється у «Нові заявки». Підтвердження — лише вами, не автоматично. На iPhone посилання потрібно відкрити в Safari.</div>
   <div class="invurl" id="invurl">${esc(url)}</div>
   <div class="row" style="gap:8px;flex-wrap:wrap"><button class="btn p grow" onclick="inviteCopy()">${ic('copy',18)} Копіювати</button><button class="btn s grow" onclick="inviteTelegram()">${ic('msg',18)} Надіслати в Telegram</button></div>
   ${canShare?`<button class="btn s" onclick="inviteShare()">${ic('link',18)} Поділитися</button>`:''}

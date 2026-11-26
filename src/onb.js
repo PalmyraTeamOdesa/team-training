@@ -91,4 +91,4 @@ async function obFinish(btn){await busy(btn,async()=>{const p=obProfile();const 
  if(st.me.status!=='active'){st.ob=null;st.screen='wait';render._k='';render();waitPoll();return}
  await sb.from('weights').upsert({athlete_id:st.me.id,day:dayIso(0,TODAY),kg:p.weight},{onConflict:'athlete_id,day'});
  delete st.plans[st.me.id+'|'+wkIso(0)];
- await loadMine();await loadTeam();st.screen='app';st.tab='plan';st.wk=0;st.ob=null;render._k='';render();subscribeLive();toast('Вітаємо! Тренер отримав вашу заявку')})}
+ await loadMine();await loadTeam();st.screen='app';st.tab='plan';st.wk=0;st.ob=null;render._k='';render();subscribeLive();toast('Вітаємо в команді!');if(typeof maybeOfferInstall==='function')setTimeout(maybeOfferInstall,500)})}
