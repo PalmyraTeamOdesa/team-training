@@ -82,11 +82,12 @@ function weekPlan(pid,wk){
  if(r){days=planRowToDays(r);note=r.note?{k:'race',t:r.note}:null;locked=r.coach_locked;if(r.scale&&r.scale<1&&!r.note)note={k:'scale',t:'План полегшено: обсяг '+Math.round(r.scale*100)+'%.'}}
  else if(p&&p.onboarded){const g=genFor(p,wk,1);days=g.days;note=g.note?{k:'race',t:g.note}:null}
  else days=Array.from({length:7},(_,i)=>({i,items:[],tod:'any',rest:true}));
- const cs=coachedSports(pid);if(cs.length)days=days.map(d=>{if(d.rest||!d.items.some(it=>cs.includes(it.sport)&&!it.coach&&!it.section))return d;return Object.assign({},d,{items:d.items.map(it=>cs.includes(it.sport)&&!it.coach&&!it.section?{sport:it.sport,log:true,section:true,min:it.min}:it)})});
+ days=sectionize(days,pid);
  const wl=pid===st.me.id?st.well[dayIso(0,TODAY)]:null;
  if(wk===0&&wl&&wellBad(wl)>=2){const t=days[TODAY];if(t&&!t.rest&&!t.items.some(x=>x.coach)){const w=LIB.find(x=>x.sport==='bike'&&x.cat==='rec')||LIB[0];days[TODAY]=Object.assign({},t,{items:[{sport:t.items[0].sport==='bike'?'bike':t.items[0].sport,w:t.items[0].sport==='bike'?w.id:null,min:Math.min(40,t.items[0].min),easy:true}],adapted:true})}note={k:'well',t:'План на сьогодні полегшено через погане самопочуття. Тренер отримав сповіщення.'}}
  return {days,note,stored,locked};
 }
+function sectionize(days,pid){const cs=coachedSports(pid);if(!cs.length)return days;return days.map(d=>{if(d.rest||!d.items.some(it=>cs.includes(it.sport)&&!it.coach&&!it.section))return d;return Object.assign({},d,{items:d.items.map(it=>cs.includes(it.sport)&&!it.coach&&!it.section?{sport:it.sport,log:true,section:true,min:it.min}:it)})})}
 function wellBad(w){return (w.sleep===0)+(w.energy===0)+(w.legs===0)}
 function athleteP(id){const a=st.athletes.find(x=>x.id===id);return a?a.p:null}
 
