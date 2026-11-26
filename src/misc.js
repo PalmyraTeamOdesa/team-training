@@ -66,7 +66,7 @@ const N_IC={request:'inbox',wellness:'alert',skip:'info',award:'trophy',comment:
 SHEETS.notifs=()=>{const list=st.notifs;const unread=list.filter(n=>!n.read).map(n=>n.id);if(unread.length)setTimeout(async()=>{await sb.from('notifications').update({read:true}).in('id',unread);list.forEach(n=>n.read=true);render()},1200);
  return {title:'Сповіщення',body:list.length?`<div class="list">${list.map(n=>`<div class="li" style="align-items:flex-start"><span class="ico ${n.read?'':'a'}">${ic(N_IC[n.kind]||'bell',20)}</span><div class="grow"><div class="t14 w6">${esc(n.title)}</div>${n.body?`<div class="t12 sec">${esc(n.body)}</div>`:''}</div><span class="t12 ter">${ago(n.created_at)}</span></div>`).join('')}</div>`:emptyBox('Нових сповіщень немає')}};
 
-/* ---------- AI ASSISTANT (Edge Function, Gemini) ---------- */
+/* ---------- AI ASSISTANT (Edge Function, xAI) ---------- */
 const AI_SUG=['Що їсти перед тренуванням?','Як відновлюватись після інтервалів?','Скільки пити в довгому заїзді?'];
 st.aiOff=false;
 SHEETS.ai=()=>({title:'Асистент',full:true,body:`<div class="s8" style="display:flex;flex-direction:column;padding-top:4px">

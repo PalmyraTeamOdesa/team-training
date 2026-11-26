@@ -18,7 +18,7 @@
   - `misc.js` — профіль, налаштування, асистент
 - `public/` — index.html, service worker, маніфест, іконки
 - `supabase/migrations/` — схема бази, політики RLS, тригери
-- `supabase/functions/` — Edge Functions `ai-assistant` (Gemini) і `account` (реєстрація, скидання пароля тренером)
+- `supabase/functions/` — Edge Functions `ai-assistant` (xAI Grok) і `account` (реєстрація, скидання пароля тренером)
 
 ## Збирання
 ```
@@ -34,5 +34,7 @@ npm run build   # результат у dist/
 - У фронтенді лише публічний ключ (publishable). Сервісний ключ живе тільки в Edge Functions.
 
 ## Асистент АІ
-Edge Function `ai-assistant` читає секрет `GEMINI_API_KEY` (і необовʼязковий `GEMINI_MODEL`, типово `gemini-2.5-flash`).
+Edge Function `ai-assistant` викликає xAI API (`https://api.x.ai/v1/chat/completions`). Ключ береться на сервері: з Supabase Vault (секрет `xai_api_key`, читається лише service role через `get_app_secret`) або з секрету Edge Function `XAI_API_KEY`. Модель — Vault `xai_model` / `XAI_MODEL`, типово `grok-4.20-0309-non-reasoning`. Ліміти: 30 запитів на день для спортсмена, 100 для тренера, до 350 токенів у відповіді. Тривожні симптоми не витрачають ліміт і йдуть тренеру.
+
+Зберегти ключ у Vault (SQL Editor у Dashboard): `select vault.create_secret('КЛЮЧ','xai_api_key');`
 Без ключа застосунок показує «АІ ще не підключено». Додати: Supabase → Edge Functions → Secrets.
