@@ -17,6 +17,7 @@ async function loadAll(){
  st.coach=!!D(await sb.from('coaches').select('user_id').eq('user_id',uid).maybeSingle());
  if(!prof){st.me=toP({id:uid,full_name:(st.user.user_metadata||{}).full_name||'',status:'pending',onboarded:false});return}
  st.me=toP(prof);
+ if(!st.coach&&st.me.status!=='active')return;
  await loadSections().catch(e=>console.warn(e));
  if(!st.coach&&coachSecs().length&&!memberSecs().length&&st.tab==='today')st.tab='sec';
  const tasks=[loadNotifs(),loadMembers()];

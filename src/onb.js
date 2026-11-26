@@ -88,6 +88,7 @@ function obReady(){const p=obProfile();const g=genFor(p,0,1);if(weekN(p,0)===0)g
 async function obFinish(btn){await busy(btn,async()=>{const p=obProfile();const old=st.me;
  Object.assign(st.me,{name:p.name,short:p.short,ini:p.ini,sex:p.sex,age:p.age,height:p.height,weight:p.weight,city:p.city,sports:p.sports,goals:p.goals,targets:p.targets,days:p.days,equip:p.equip,form:p.form,health:p.health,remind:p.remind,races:p.races,ftpHist:p.form.ftp?[{d:dayIso(0,TODAY),v:p.form.ftp}]:[]});
  await saveMe({onboarded:true,consent:true});
+ if(st.me.status!=='active'){st.ob=null;st.screen='wait';render._k='';render();waitPoll();return}
  await sb.from('weights').upsert({athlete_id:st.me.id,day:dayIso(0,TODAY),kg:p.weight},{onConflict:'athlete_id,day'});
  delete st.plans[st.me.id+'|'+wkIso(0)];
  await loadMine();await loadTeam();st.screen='app';st.tab='plan';st.wk=0;st.ob=null;render._k='';render();subscribeLive();toast('Вітаємо! Тренер отримав вашу заявку')})}

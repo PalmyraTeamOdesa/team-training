@@ -38,9 +38,16 @@ async function startSession(session){
  if(!st.me){st.screen='auth';render();return}
  if(st.me.status==='blocked'&&!st.coach){st._authMsg='Доступ до команди закрито адміністратором.';await sb.auth.signOut();return}
  if(!st.coach&&!st.me.onboarded){startOnb();return}
+ if(!st.coach&&st.me.status!=='active'){st.screen='wait';render();waitPoll();return}
  st.screen='app';if(st.coach)st.ctab='team';render();subscribeLive();
  if(location.hash==='#recovery')openSheet('password');
 }
+function waitView(){return `<main><div class="stack" style="padding-top:72px;text-align:center"><div class="okcircle" style="margin:0 auto">${ic('clock',28)}</div><div class="t28">Заявку надіслано</div><div class="t14 sec">Тренер ще не підтвердив вашу участь. Поки що в застосунку нічого не відкрито: після підтвердження зʼявляться ваш план і команда.</div><button class="btn s" onclick="waitCheck(this)">Перевірити статус</button><button class="btn t" onclick="logout()">Вийти</button></div></main>`}
+let _wt=null;function waitPoll(){clearInterval(_wt);_wt=setInterval(()=>{if(st.screen!=='wait'){clearInterval(_wt);return}waitCheck(null,true)},30000)}
+async function waitCheck(btn,quiet){try{const r=D(await sb.from('profiles').select('status').eq('id',st.user.id).maybeSingle());
+ if(r&&r.status==='active'){clearInterval(_wt);const {data}=await sb.auth.getSession();st.user=null;await startSession(data.session);return}
+ if(r&&r.status==='blocked'){clearInterval(_wt);await sb.auth.signOut();location.reload();return}
+ if(!quiet)toast('Поки що очікуємо підтвердження тренера','info')}catch(e){if(!quiet)toast('Немає звʼязку. Спробуйте пізніше','info')}}
 function onTab(t){}
 let _live=null;
 function subscribeLive(){if(_live)return;
