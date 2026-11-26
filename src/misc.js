@@ -185,7 +185,7 @@ async function exportData(btn){await busy(btn,async()=>{const uid=st.me.id;const
 /* ---------- NOTIFICATIONS ---------- */
 const N_IC={request:'inbox',wellness:'alert',skip:'info',award:'trophy',comment:'msg',dm:'msg',announce:'mega',join:'users',redflag:'alert',board:'list',board_mark:'check',points:'star',pause:'clock'};
 SHEETS.notifs=()=>{const list=st.notifs;const unread=list.filter(n=>!n.read).map(n=>n.id);if(unread.length)setTimeout(async()=>{await sb.from('notifications').update({read:true}).in('id',unread);list.forEach(n=>n.read=true);render()},1200);
- return {title:'Сповіщення',body:list.length?`<div class="list">${list.map(n=>`<div class="li" style="align-items:flex-start"><span class="ico ${n.read?'':'a'}">${ic(N_IC[n.kind]||'bell',20)}</span><div class="grow"><div class="t14 w6">${esc(n.title)}</div>${n.body?`<div class="t12 sec">${esc(n.body)}</div>`:''}</div><span class="t12 ter">${ago(n.created_at)}</span></div>`).join('')}</div>`:emptyBox('Нових сповіщень немає')}};
+ return {title:'Сповіщення',body:list.length?`<div class="list">${list.map(n=>`<button class="li" style="align-items:flex-start;width:100%;text-align:left;background:none;color:inherit" onclick="notifGo(${n.id})"><span class="ico ${n.read?'':'a'}">${ic(N_IC[n.kind]||'bell',20)}</span><div class="grow"><div class="t14 w6">${esc(n.title)}</div>${n.body?`<div class="t12 sec">${esc(n.body)}</div>`:''}</div><span class="t12 ter">${ago(n.created_at)}</span></button>`).join('')}</div>`:emptyBox('Нових сповіщень немає')}};
 
 /* ---------- AI ASSISTANT (Edge Function, xAI) ---------- */
 const AI_SUG=['Що їсти перед тренуванням?','Як відновлюватись після інтервалів?','Скільки пити в довгому заїзді?'];
@@ -211,3 +211,22 @@ setInterval(()=>{try{if(!st.me||isCoach()||!('Notification' in window)||Notifica
 window.__errs=[];window.addEventListener('error',e=>window.__errs.push(String(e.message)));window.addEventListener('unhandledrejection',e=>window.__errs.push(String(e.reason&&e.reason.message||e.reason)));
 
 if(typeof parseInviteHash==="function")parseInviteHash();
+
+/* tap on a notification → go where it points */
+function notifGo(id){const n=st.notifs.find(x=>x.id===id);if(!n)return;closeSheet();const t=(n.title||'')+' '+(n.body||'');
+ const secByName=()=>{const k=Object.keys(SEC_DEF).find(k=>t.includes(SEC_DEF[k].name));return k};
+ const dmFrom=()=>{const m=/від\s+(.+)$/.exec(n.title||'');if(!m)return null;const nm=m[1].trim();const all=(st.members||[]).concat(st.athletes||[]);const x=all.find(a=>(a.full_name||a.name||'')===nm)||all.find(a=>nameOf(a.id)===nm);return x?x.id:null};
+ const k=n.kind;
+ if(isCoach()){
+  if(k==='request'||k==='join'){go('req');return}
+  if(k==='dm'||k==='comment'){const u=dmFrom();if(u){go('chat');setTimeout(()=>openSheet('dm',u),60);return}go('chat');return}
+  if(k==='announce'){go('events');return}
+  if(k==='board'||k==='board_mark'||k==='points'){const sc=secByName();if(sc)st.sec=sc;go('sec');return}
+  go('team');return}
+ if(k==='dm'){const u=dmFrom();if(u){setTimeout(()=>openSheet('dm',u),60);return}st.teamSeg='chat';st.chatSeg='coach';go('team');return}
+ if(k==='announce'){if(/заїзд/i.test(t)){st.teamSeg='events';go('team');return}st.teamSeg='feed';go('team');return}
+ if(k==='comment'||k==='join'){st.teamSeg='feed';go('team');return}
+ if(k==='award'){go('prog');setTimeout(()=>openSheet('ach'),60);return}
+ if(k==='points'||k==='board'||k==='board_mark'){const sc=secByName();if(sc)st.sec=sc;go('sec');return}
+ if(k==='pause'||k==='request'){go('today');return}
+ go('today')}

@@ -50,9 +50,15 @@ function rateBy(v){st.rateBy=v;render()}
 
 /* events: rides, challenge, lessons */
 function rideWhen(r){if(!r.starts_at)return '';const d=new Date(r.starts_at);return DAYS_FULL[(d.getDay()+6)%7]+', '+fmtDate(d)+' · '+hhmm(r.starts_at)}
+function upRides(){return st.rides.filter(r=>!r.starts_at||new Date(r.starts_at)>Date.now()-6*36e5)}
+function rideCard(r){const g=(r.ride_participants||[]).map(x=>x.user_id);const me_=g.includes(st.me.id);return `<div class="card s12"><div class="row12"><span class="ico a">${ic('bike',20)}</span><div class="grow"><div class="t16">${esc(r.title)}</div><div class="t14 sec">${esc(rideWhen(r))}${r.details?' · '+esc(r.details):''}</div></div></div>
+  <div class="between"><button class="row" style="background:none;border:0;min-height:44px;color:inherit" onclick="openSheet('ride',${r.id})"><div class="avstack">${g.slice(0,5).map(id=>avOf(id)).join('')}</div><span class="t12 sec">${g.length} їдуть</span></button>
+  <button class="btn ${me_?'s':'p'} sm" style="width:auto;min-width:96px" onclick="toggleRide(this,${r.id})">${me_?ic('check',18)+' Їду':ic('plus',18)+' Їду'}</button></div></div>`}
+function todayRides(){const up=upRides().filter(r=>!r.starts_at||new Date(r.starts_at)<Date.now()+8*864e5);return up.length?`<div class="over">Командні заїзди</div>`+up.map(rideCard).join(''):''}
 function eventsBody(){
- const up=st.rides.filter(r=>!r.starts_at||new Date(r.starts_at)>Date.now()-6*36e5);
- let h=`<div class="over">Командні заїзди</div>`+(up.length?up.map(r=>{const g=(r.ride_participants||[]).map(x=>x.user_id);const me_=g.includes(st.me.id);return `<div class="card s12"><div class="t16">${esc(r.title)}</div><div class="t14 sec">${esc(rideWhen(r))}${r.details?' · '+esc(r.details):''}</div>
+ const up=upRides();
+ let h=`<div class="over">Командні заїзди</div>`+(up.length?up.map(rideCard).join(''):emptyBox('Заїздів поки немає','Тренер додасть найближчий'));
+ if(0)h+=(up.length?up.map(r=>{const g=(r.ride_participants||[]).map(x=>x.user_id);const me_=g.includes(st.me.id);return `<div class="card s12"><div class="t16">${esc(r.title)}</div><div class="t14 sec">${esc(rideWhen(r))}${r.details?' · '+esc(r.details):''}</div>
   <div class="between"><button class="row" style="background:none;border:0;min-height:44px;color:inherit" onclick="openSheet('ride',${r.id})"><div class="avstack">${g.slice(0,5).map(id=>avOf(id)).join('')}</div><span class="t12 sec">${g.length} їдуть</span></button>
   <button class="btn ${me_?'s':'p'} sm" onclick="toggleRide(this,${r.id})">${me_?ic('check',18)+' Їду':ic('plus',18)+' їду'}</button></div></div>`}).join(''):emptyBox('Заїздів поки немає','Тренер додасть найближчий'));
  const c=st.challenges[0];
