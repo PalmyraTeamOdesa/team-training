@@ -10,7 +10,8 @@ function isAdmin(){return !!st.coach}
 function coachSecs(uid){uid=uid||st.me.id;return st.secCoaches.filter(c=>c.user_id===uid).map(c=>c.section_id)}
 function memberSecs(uid){uid=uid||st.me.id;return st.secMembers.filter(m=>m.athlete_id===uid).map(m=>m.section_id)}
 function canCoach(sec){return isCoach()||coachSecs().includes(sec)}
-function mySecs(){const s=isCoach()?SEC_ORDER.slice():[...new Set([...coachSecs(),...memberSecs()])];return SEC_ORDER.filter(x=>s.includes(x))}
+function inSec(sec){return memberSecs().includes(sec)||coachSecs().includes(sec)}
+function mySecs(){if(isCoach()||(st.me&&st.me.status==='active'))return SEC_ORDER.slice();return SEC_ORDER.filter(x=>inSec(x))}
 function secAthletes(sec){return st.secMembers.filter(m=>m.section_id===sec).map(m=>m.athlete_id)}
 function secLiveAthletes(sec){return secAthletes(sec).filter(id=>!isPausedId(id))}
 function secCoachIds(sec){return st.secCoaches.filter(c=>c.section_id===sec).map(c=>c.user_id)}
@@ -48,17 +49,21 @@ function secView(){
  if(!list.length&&!coachMode){st.sec='club';}
  const chips=list.map(id=>secChip(id,st.sec===id,'secPick')).join('')+(coachMode?'':`<button class="chip ${st.sec==='club'?'on':''}" onclick="secPick('club')">${ic('users',16)} Клуб</button>`);
  let h=`<div class="stack"><div class="chips scroll">${chips}</div>`;
- if(st.sec==='club'||!st.sec){if(!list.length&&!coachMode)h+=`<div class="note">${ic('info',20)}<span>Вас ще не додали до секції. Коли адміністратор додасть, тут зʼявиться дошка тренера.</span></div>`;return h+teamView()+'</div>'}
- const sec=st.sec,s=secInfo(sec),cc=canCoach(sec);
+ if(st.sec==='club'||!st.sec){if(!list.length&&!coachMode)h+=`<div class="note">${ic('info',20)}<span>Оберіть секцію і натисніть «Записатися», щоб бачити дошку тренера.</span></div>`;return h+teamView()+'</div>'}
+ const sec=st.sec,s=secInfo(sec),cc=canCoach(sec),mine=inSec(sec);
  const coaches=secCoachIds(sec);
  h+=`<div class="sechero" style="--sc:${s.color}"><span class="secico">${ic(s.icon,22)}</span><div class="grow"><div class="t16 w7">${esc(s.name)}</div><div class="t12 sec ell">${coaches.length?'Тренер: '+coaches.map(id=>esc(cleanName(nameOf(id)))).join(', '):'Тренера ще не призначено'} · ${secAthletes(sec).length} спортсм.</div></div>${cc?tag(isCoach()?'адмін':'тренер','a'):''}</div>`;
+ if(!mine&&!cc){h+=`<div class="card s8"><div class="t16">Ви не бачите вміст цієї секції, поки не запишетеся</div><div class="t14 sec" style="margin-top:6px">Запис одразу відкриває дошку і рейтинг. Піти можна в будь-який момент.</div><button class="btn p" style="margin-top:12px" onclick="secJoin(this,'${sec}')">Записатися</button></div>`;return h+'</div>'}
  if(!cc)h+=coachesCard(sec,'Тренери секції');
  const segs=[['board','Дошка'],['rate','Рейтинг']];if(cc)segs.push(['people','Учасники']);
  h+=seg(segs,st.secSeg,'secSegSet');
  h+=({board:boardBody,rate:secRateBody,people:secPeopleBody})[st.secSeg]?.(sec)||'';
+ if(memberSecs().includes(sec)&&!coachMode)h+=`<button class="btn t" onclick="secLeave(this,'${sec}')">Покинути секцію</button>`;
  return h+'</div>'}
 function secPick(id){st.sec=id;if(id!=='club'&&st.secSeg==='people'&&!canCoach(id))st.secSeg='board';render()}
 function secSegSet(v){st.secSeg=v;render()}
+async function secJoin(btn,sec){await busy(btn,async()=>{D(await sb.rpc('join_section',{sec}));await loadSections();render();toast('Вас записано до секції «'+secInfo(sec).name+'»')})}
+async function secLeave(btn,sec){if(!confirm('Покинути секцію «'+secInfo(sec).name+'»? Дошку і рейтинг ви більше не бачитимете.'))return;await busy(btn,async()=>{D(await sb.rpc('leave_section',{sec}));await loadSections();render();toast('Ви покинули секцію')})}
 
 /* --- board view --- */
 function boardBody(sec){
@@ -216,7 +221,7 @@ SHEETS.secPick=a=>{const s=secInfo(a.sec);const have=a.role==='coach'?secCoachId
  <div class="list">${list.map(x=>`<label class="li" style="cursor:pointer"><input type="checkbox" onchange="this.checked?st._sel.add('${x.id}'):st._sel.delete('${x.id}')" style="width:20px;height:20px"><div class="grow t14 w6 ell">${esc(cleanName(x.name))}</div>${memberSecs(x.id).map(secDot).join('')}</label>`).join('')||'<div class="li"><div class="grow t14 ter">Немає доступних акаунтів</div></div>'}</div></div>`,
  foot:`<button class="btn p" onclick="secAssign(this,'${a.sec}','${a.role}')">Додати</button>`}};
 async function secAssign(btn,sec,role){const ids=[...st._sel];if(!ids.length)return toast('Нікого не обрано','info');
- await busy(btn,async()=>{if(role==='coach')D(await sb.from('section_coaches').insert(ids.map(id=>({section_id:sec,user_id:id}))));else D(await sb.from('section_members').insert(ids.map(id=>({section_id:sec,athlete_id:id}))));
+ await busy(btn,async()=>{if(role==='coach'){if(!isCoach())throw new Error('Лише адміністратор призначає тренерів');D(await sb.from('section_coaches').insert(ids.map(id=>({section_id:sec,user_id:id}))))}else D(await sb.from('section_members').insert(ids.map(id=>({section_id:sec,athlete_id:id}))));
   closeAll();await loadSections();render();toast(role==='coach'?'Тренера призначено':'Додано: '+ids.length)})}
 async function secRemoveCoach(btn,sec,id){await busy(btn,async()=>{D(await sb.from('section_coaches').delete().eq('section_id',sec).eq('user_id',id));await loadSections();render();toast('Тренера прибрано')})}
 async function secRemoveMember(btn,sec,id){await busy(btn,async()=>{D(await sb.from('section_members').delete().eq('section_id',sec).eq('athlete_id',id));await loadSections();render();toast('Прибрано зі секції')})}

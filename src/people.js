@@ -57,7 +57,7 @@ SHEETS.person=id=>{const r=profRow(id);if(!r)return {title:'',body:''};const sel
  if(r.status==='pending'){b+=`<div class="note">${ic('clock',20)}<span>${r.onboarded?'Анкету заповнено, очікує підтвердження.':'Анкету ще не заповнено. Можна підтвердити зараз або зачекати, поки людина закінчить реєстрацію.'}</span></div>`;return {title:'Людина',full:true,body:b+'</div>',foot:`<button class="btn s" onclick="openSheet('athlete','${id}')">Відкрити заявку</button><button class="btn p" onclick="approve(this,'${id}')">Прийняти в команду</button>`}}
  if(out)return {title:'Людина',full:true,body:b+`<div class="note warn">${ic('alert',20)}<span>Виключено з команди. Вхід закрито, секційні ролі прибрано. Історія тренувань, відміток, балів і нагород збережена.</span></div><button class="btn p" onclick="personRestore(this,'${id}')">${ic('unlock',20)} Повернути в команду</button></div>`};
  b+=`<div class="row" style="gap:8px">${self?`<button class="btn s sm grow" onclick="closeAll();toSelf(null)">${ic('bike',18)} Мій кабінет</button>`:`<button class="btn p sm grow" onclick="openDm('${id}')">${ic('msg',18)} Написати</button><button class="btn s sm grow" onclick="openSheet('athlete','${id}')">${ic('chart',18)} Навантаження</button>`}</div>
- <div class="list">${li({left:`<span class="ico a">${ic('users',20)}</span>`,t:'Зробити тренером · секції',s:(cs.length?'Тренер: '+cs.map(s=>secInfo(s).name).join(', '):'Не тренер')+' · спортсмен: '+(ms.map(s=>secInfo(s).name).join(', ')||'ніде'),on:`openRoles('${id}')`})}
+ <div class="list">${li({left:`<span class="ico a">${ic('target',20)}</span>`,t:'Секції',s:secSummary(id),on:`openPersonSecs('${id}')`})}
  ${self?'':li({left:`<span class="ico a">${ic('trophy',20)}</span>`,t:'Нагородити',s:'Бали, 🔥 похвала, досягнення, приз',on:`openReward('${id}')`})}
  ${self?'':li({left:`<span class="ico">${ic('user',20)}</span>`,t:'Навантаження і профіль',s:'План, тренування, анкета, нотатки',on:`openSheet('athlete','${id}')`})}
  ${self?'':li({left:`<span class="ico">${ic('lock',20)}</span>`,t:'Скинути пароль',s:'Створити тимчасовий пароль',on:`resetPw(this,'${id}')`})}
@@ -66,16 +66,21 @@ SHEETS.person=id=>{const r=profRow(id);if(!r)return {title:'',body:''};const sel
  return {title:'Людина',full:true,body:b}};
 
 /* --- roles & sections (one save) --- */
+
+function secSummary(id){const bits=SEC_ORDER.map(s=>{const c=coachSecs(id).includes(s),m=memberSecs(id).includes(s);if(!c&&!m)return '';return secInfo(s).name+(c&&m?' · тренер і спортсмен':c?' · тренер':'')}).filter(Boolean);return bits.join(', ')||'Не записаний у жодну секцію'}
+function openPersonSecs(id){st._pr={id,coach:new Set(coachSecs(id)),member:new Set(memberSecs(id))};openSheet('personRoles',id)}
 function openRoles(id){st._pr={id,coach:new Set(coachSecs(id)),member:new Set(memberSecs(id))};openSheet('personRoles',id)}
-function prGrid(){const pr=st._pr;
- return `<div class="list">${SEC_ORDER.map(s=>{const i=secInfo(s);return `<div class="li prrow">${secDot(s)}<div class="grow t14 w6">${esc(i.name)}</div><div class="practs"><button class="chip ${pr.coach.has(s)?'on':''}" onclick="prTog('coach','${s}')">Тренер</button><button class="chip ${pr.member.has(s)?'on':''}" onclick="prTog('member','${s}')">Спортсмен</button></div></div>`}).join('')}</div>
- <div class="row" style="gap:8px;flex-wrap:wrap"><button class="btn s sm grow" onclick="prAll('coach')">${SEC_ORDER.every(s=>st._pr.coach.has(s))?'Прибрати тренера скрізь':'Тренер в усіх'}</button><button class="btn s sm grow" onclick="prAll('member')">${SEC_ORDER.every(s=>st._pr.member.has(s))?'Прибрати зі всіх':'Спортсмен в усіх'}</button></div>`}
+function prNone(s){prSync();st._pr.coach.delete(s);st._pr.member.delete(s);renderSheet()}
+function prGrid(){const pr=st._pr;const admin=typeof isCoach==='function'&&isCoach();
+ return `<div class="list">${SEC_ORDER.map(s=>{const i=secInfo(s),none=!pr.coach.has(s)&&!pr.member.has(s);
+  return `<div class="li prrow">${secDot(s)}<div class="grow t14 w6">${esc(i.name)}</div><div class="practs"><button class="chip ${none?'on':''}" onclick="prNone('${s}')">Немає</button><button class="chip ${pr.member.has(s)?'on':''}" onclick="prTog('member','${s}')">Спортсмен</button>${admin?`<button class="chip ${pr.coach.has(s)?'on':''}" onclick="prTog('coach','${s}')">Тренер</button>`:''}</div></div>`}).join('')}</div>
+ ${admin?`<div class="row" style="gap:8px;flex-wrap:wrap"><button class="btn s sm grow" onclick="prAll('coach')">${SEC_ORDER.every(s=>st._pr.coach.has(s))?'Прибрати тренера скрізь':'Тренер в усіх'}</button><button class="btn s sm grow" onclick="prAll('member')">${SEC_ORDER.every(s=>st._pr.member.has(s))?'Прибрати зі всіх':'Спортсмен в усіх'}</button></div>`:''}`}
 function prSync(){const a=$('#npn'),b=$('#npe');if(a)st._pr.name=a.value;if(b)st._pr.email=b.value}
 function prTog(k,s){prSync();const set=st._pr[k];set.has(s)?set.delete(s):set.add(s);renderSheet()}
 function prAll(k){prSync();const set=st._pr[k],all=SEC_ORDER.every(s=>set.has(s));SEC_ORDER.forEach(s=>all?set.delete(s):set.add(s));renderSheet()}
 SHEETS.personRoles=id=>{const pr=st._pr;if(!pr||pr.id!==id)return {title:'',body:''};const cur={c:coachSecs(id),m:memberSecs(id)};
  const diff=[];SEC_ORDER.forEach(s=>{const n=secInfo(s).name;if(pr.coach.has(s)&&!cur.c.includes(s))diff.push('+ тренер: '+n);if(!pr.coach.has(s)&&cur.c.includes(s))diff.push('− тренер: '+n);if(pr.member.has(s)&&!cur.m.includes(s))diff.push('+ спортсмен: '+n);if(!pr.member.has(s)&&cur.m.includes(s))diff.push('− спортсмен: '+n)});
- return {title:'Ролі · '+esc(shortName(id)),body:`<div class="stack"><div class="t14 sec">Позначте секції, де людина тренер і де спортсмен. Можна всі одразу; знімаючи позначку, ви прибираєте роль. Тренер секції пише дошку, нагороджує і бачить лише своїх спортсменів, але не додає людей.</div>${prGrid()}
+ return {title:'Секції · '+esc(shortName(id)),body:`<div class="stack"><div class="t14 sec">Запишіть людину в секції як спортсмена. Тренером може призначити лише адміністратор — тренер пише дошку, нагороджує і бачить своїх спортсменів, але не додає людей.</div>${prGrid()}
   ${diff.length?`<div class="note">${ic('info',20)}<span>${diff.map(esc).join('<br>')}</span></div>`:`<div class="t12 ter">Змін поки немає</div>`}</div>`,
   foot:`<button class="btn p" onclick="prSave(this)">Зберегти</button>`}};
 async function prSave(btn){const pr=st._pr;await busy(btn,async()=>{D(await sb.rpc('admin_set_roles',{uid:pr.id,coach_sections:[...pr.coach],member_sections:[...pr.member]}));await refreshPeople();closeSheet();toast('Ролі збережено')})}
