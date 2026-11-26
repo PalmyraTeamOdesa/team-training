@@ -1,6 +1,6 @@
 /* ---------- TEAM (athlete) ---------- */
 function teamView(){
- if(st.me.status!=='active')return `<div class="stack">${pendingBanner()}${emptyBox('Команда відкриється після підтвердження','Тренер отримав вашу заявку. Поки можна писати тренеру напряму.')}<button class="btn p" onclick="openSheet('dm','${coachId()||''}')">${ic('msg',20)} Написати тренеру</button></div>`;
+ if(st.me.status!=='active')return `<div class="stack">${pendingBanner()}${emptyBox('Клуб відкриється після підтвердження','Тренер отримав вашу заявку. Поки можна писати тренеру напряму.')}<button class="btn p" onclick="openSheet('dm','${coachId()||''}')">${ic('msg',20)} Написати тренеру</button></div>`;
  if(!['feed','rate','events'].includes(st.teamSeg))st.teamSeg='feed';
  let h=`<div class="stack">${seg([['feed','Стрічка'],['rate','Рейтинг'],['events','Події']],st.teamSeg,'teamSeg')}`;
  h+=({feed:feedBody,rate:rateBody,events:eventsBody})[st.teamSeg]();
@@ -55,10 +55,10 @@ function upRides(){return st.rides.filter(r=>!r.starts_at||new Date(r.starts_at)
 function rideCard(r){const g=(r.ride_participants||[]).map(x=>x.user_id);const me_=g.includes(st.me.id);return `<div class="card s12"><div class="row12"><span class="ico a">${ic('bike',20)}</span><div class="grow"><div class="t16">${esc(r.title)}</div><div class="t14 sec">${esc(rideWhen(r))}${r.details?' · '+esc(r.details):''}</div></div></div>
   <div class="between"><button class="row" style="background:none;border:0;min-height:44px;color:inherit" onclick="openSheet('ride',${r.id})"><div class="avstack">${g.slice(0,5).map(id=>avOf(id)).join('')}</div><span class="t12 sec">${g.length} їдуть</span></button>
   <button class="btn ${me_?'s':'p'} sm" style="width:auto;min-width:96px" onclick="toggleRide(this,${r.id})">${me_?ic('check',18)+' Їду':ic('plus',18)+' Їду'}</button></div></div>`}
-function todayRides(){const up=upRides().filter(r=>!r.starts_at||new Date(r.starts_at)<Date.now()+8*864e5);return up.length?`<div class="over">Командні заїзди</div>`+up.map(rideCard).join(''):''}
+function todayRides(){const up=upRides().filter(r=>!r.starts_at||new Date(r.starts_at)<Date.now()+8*864e5);return up.length?`<div class="between"><div class="over">Командні заїзди</div><button class="btn t sm" style="width:auto" onclick="goClub('events')">Усі події</button></div>`+up.map(rideCard).join(''):''}
 function eventsBody(){
  const up=upRides();
- let h=`<div class="over">Командні заїзди</div>`+(up.length?up.map(rideCard).join(''):emptyBox('Заїздів поки немає','Тренер додасть найближчий'));
+ let h=`<div class="between"><div class="over">Командні заїзди</div>${isCoach()?`<button class="btn t sm" style="width:auto" onclick="go('events')">Керувати</button>`:''}</div>`+(up.length?up.map(rideCard).join(''):emptyBox('Заїздів поки немає','Тренер додасть найближчий'));
  if(0)h+=(up.length?up.map(r=>{const g=(r.ride_participants||[]).map(x=>x.user_id);const me_=g.includes(st.me.id);return `<div class="card s12"><div class="t16">${esc(r.title)}</div><div class="t14 sec">${esc(rideWhen(r))}${r.details?' · '+esc(r.details):''}</div>
   <div class="between"><button class="row" style="background:none;border:0;min-height:44px;color:inherit" onclick="openSheet('ride',${r.id})"><div class="avstack">${g.slice(0,5).map(id=>avOf(id)).join('')}</div><span class="t12 sec">${g.length} їдуть</span></button>
   <button class="btn ${me_?'s':'p'} sm" onclick="toggleRide(this,${r.id})">${me_?ic('check',18)+' Їду':ic('plus',18)+' їду'}</button></div></div>`}).join(''):emptyBox('Заїздів поки немає','Тренер додасть найближчий'));

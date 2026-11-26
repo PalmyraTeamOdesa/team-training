@@ -221,8 +221,8 @@ function notifGo(id){const n=st.notifs.find(x=>x.id===id);if(!n)return;if(typeof
   if(k==='board'||k==='board_mark'||k==='points'){const sc=secByName();if(sc)st.sec=sc;go('sec');return}
   go('team');return}
  if(k==='dm'){st.chatSeg='dm';go('chat');const u=dmFrom();if(u)setTimeout(()=>openSheet('dm',u),60);return}
- if(k==='announce'){if(/заїзд/i.test(t)){st.teamSeg='events';go('team');return}st.teamSeg='feed';go('team');return}
- if(k==='comment'||k==='join'){st.teamSeg='feed';go('team');return}
+ if(k==='announce'){goClub(/заїзд/i.test(t)?'events':'feed');return}
+ if(k==='comment'||k==='join'){goClub('feed');return}
  if(k==='award'){go('prog');setTimeout(()=>openSheet('ach'),60);return}
  if(k==='points'||k==='board'||k==='board_mark'){const sc=secByName();if(sc)st.sec=sc;go('sec');return}
  if(k==='pause'||k==='request'){go('today');return}

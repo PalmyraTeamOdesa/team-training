@@ -35,8 +35,8 @@ function render(){
 function logoHtml(){return window.__LOGO?'<img class="logo logoimg" src="icons/logo-256.png" alt="TRITON" width="88" height="88">':'<div class="logo">T</div>'}
 function go(tab){const cur=isCoach()?st.ctab:st.tab,same=cur===tab;if(isCoach())st.ctab=tab;else st.tab=tab;const m=$('main');if(m)m.scrollTop=0;render._k='';render();onTab(tab);if(typeof navWrite==='function')navWrite(same)}
 function headerView(){
- const p=me();const titles={today:'Сьогодні',plan:st.planSeg==='food'?'Їжа':'План',team:'Команда',sec:'Секції',food:'Харчування',prog:'Прогрес',chat:typeof chatTitle==='function'?chatTitle():'Чат'};
- const ctitles={team:'Люди',sec:'Секції',req:'Запити',lib:'Бібліотека',events:'Події',chat:'Чати'};
+ const p=me();const titles={today:'Сьогодні',plan:st.planSeg==='food'?'Їжа':'План',sec:st.sec==='club'?'Клуб':'Секції',food:'Харчування',prog:'Прогрес',chat:typeof chatTitle==='function'?chatTitle():'Чат'};
+ const ctitles={team:'Люди',sec:st.sec==='club'?'Клуб':'Секції',req:'Запити',lib:'Бібліотека',events:'Події',chat:'Чати'};
  const t=isCoach()?ctitles[st.ctab]:titles[st.tab];
  const unread=st.notifs.some(n=>!n.read);
  return `<header class="top"><button class="btn-av" onclick="openSheet('profile')" aria-label="Профіль"><span class="av ${isCoach()?'me':''}">${avIn(st.me.id,p.ini)}</span></button>
@@ -46,11 +46,11 @@ function headerView(){
  <button class="ib" onclick="openSheet('notifs')" aria-label="Сповіщення">${ic('bell',22)}${unread?'<i class="dot"></i>':''}</button></header>`}
 function tabsView(){
  const a=isCoach()?[['team','users','Люди'],['sec','target','Секції'],['req','inbox','Запити'],['events','flag','Події'],['chat','msg','Чати']]
-  :[['today','today','Сьогодні'],['plan','cal','План'],['sec','target','Секції'],['team','users','Команда'],['chat','msg','Чат'],['prog','chart','Прогрес']];
+  :[['today','today','Сьогодні'],['plan','cal','План'],['sec','target','Секції'],['chat','msg','Чат'],['prog','chart','Прогрес']];
  const cur=isCoach()?st.ctab:st.tab;
  const pend=st.requests.filter(r=>r.status==='pending').length+(isCoach()?st.athletes.filter(a=>a.status==='pending').length:0);
  return `<nav class="tabs">${a.map(x=>`<button class="${cur===x[0]?'on':''}" onclick="go('${x[0]}')">${ic(x[1],24)}<span>${x[2]}</span>${isCoach()&&x[0]==='req'&&pend?`<b class="cnt">${pend}</b>`:''}${!isCoach()&&x[0]==='chat'&&typeof secUnread==='function'&&st.me&&st.me.status==='active'?(n=>n?`<b class="cnt">${n}</b>`:'')(SEC_ORDER.filter(inSec).reduce((a,s)=>a+secUnread(s),0)):''}</button>`).join('')}</nav>`}
-function athleteView(){if(st.tab==='food'){st.tab='plan';st.planSeg='food'}return ({today:todayView,plan:planView,team:teamView,sec:secView,chat:chatTabView,prog:progView})[st.tab]()}
+function athleteView(){if(st.tab==='food'){st.tab='plan';st.planSeg='food'}if(st.tab==='team'){st.tab='sec';st.sec='club'}return ({today:todayView,plan:planView,sec:secView,chat:chatTabView,prog:progView})[st.tab]()}
 function coachView(){return ({team:peopleView,sec:secView,req:cReqView,lib:cLibView,events:cEventsView,chat:cChatView})[st.ctab]()}
 
 /* ---------- SHEETS ---------- */
@@ -81,14 +81,17 @@ async function busy(btn,fn){if(btn&&btn.disabled)return;if(btn){btn.disabled=tru
 /* ---------- HISTORY / ANDROID BACK ---------- */
 let _navPop=false,_exitAt=0,_sheetDepth=0;
 function navArg(a){if(a==null||['string','number','boolean'].includes(typeof a))return a;try{return JSON.parse(JSON.stringify(a))}catch(e){return null}}
-function navSnap(){return {triton:1,screen:st.screen,tab:isCoach()?st.ctab:st.tab,coachSelf:!!st.coachSelf,obStep:st.ob&&st.ob.step||0,sheets:sheetStack.map(s=>({name:s.name,arg:navArg(s.arg)}))}}
+function navSnap(){return {triton:1,screen:st.screen,tab:isCoach()?st.ctab:st.tab,sec:st.sec,secSeg:st.secSeg,teamSeg:st.teamSeg,planSeg:st.planSeg,chatSeg:st.chatSeg,coachSelf:!!st.coachSelf,obStep:st.ob&&st.ob.step||0,sheets:sheetStack.map(s=>({name:s.name,arg:navArg(s.arg)}))}}
 function navUrl(){const h=location.hash||'';return location.pathname+location.search+(h&&/^#(i|recovery)\b/.test(h)?h:'')}
 function navWrite(replace){if(_navPop)return;try{history[replace?'replaceState':'pushState'](navSnap(),'',navUrl())}catch(e){}}
 function navBoot(force){const cur=history.state;if(!force&&cur&&cur.triton&&!cur.sentinel)return;try{history.replaceState(Object.assign(navSnap(),{sentinel:true}),'',navUrl());history.pushState(navSnap(),'',navUrl())}catch(e){}}
 function applyNav(s){if(s.screen==='auth'&&st.user){navWrite(true);return}
  if(st.coach&&typeof s.coachSelf==='boolean')st.coachSelf=s.coachSelf;
- const ct=['team','sec','req','lib','events','chat'],at=['today','plan','sec','chat','prog','team'];if(s.tab==='food'){s=Object.assign({},s,{tab:'plan'});st.planSeg='food'}
+ const ct=['team','sec','req','lib','events','chat'],at=['today','plan','sec','chat','prog'];
+ if(s.tab==='food'){s=Object.assign({},s,{tab:'plan'});st.planSeg='food'}
+ if(!isCoach()&&s.tab==='team'){s=Object.assign({},s,{tab:'sec'});if(!s.sec)s.sec='club'}
  if(s.tab){if(isCoach()){if(ct.includes(s.tab))st.ctab=s.tab}else if(at.includes(s.tab))st.tab=s.tab}
+ if(s.sec!=null)st.sec=s.sec;if(s.secSeg)st.secSeg=s.secSeg;if(s.teamSeg)st.teamSeg=s.teamSeg;if(s.planSeg)st.planSeg=s.planSeg;if(s.chatSeg)st.chatSeg=s.chatSeg
  if(st.screen==='onb'&&st.ob&&s.obStep)st.ob.step=s.obStep;
  sheetStack=(s.sheets||[]).map(x=>({name:x.name,arg:x.arg}));_sheetDepth=sheetStack.length;render._k='';render()}
 function onNavPop(ev){const s=ev.state;

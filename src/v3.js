@@ -209,4 +209,6 @@ function notifLink(n){const L=n.link;if(!L||!L.t)return false;closeAll();
  if(L.t==='secchat'&&L.s){st.sec=L.s;go('sec');setTimeout(()=>openSheet('secChat',L.s),60);return true}
  if(L.t==='ready'&&L.a){if(L.a===st.me.id&&!isCoach()){go('today');return true}if(isCoach()&&st.athletes.some(a=>a.id===L.a)){go('team');setTimeout(()=>openSheet('athlete',L.a),60);return true}setTimeout(()=>openSheet('readyC',L.a),60);return true}
  if(L.t==='today'){if(isCoach()&&typeof cabinetSwitch==='function'){}go(isCoach()?'team':'today');return true}
+ if(L.t==='events'||L.t==='ride'){goClub('events');return true}
+ if(L.t==='feed'||L.t==='club'){goClub(L.seg||'feed');return true}
  return false}

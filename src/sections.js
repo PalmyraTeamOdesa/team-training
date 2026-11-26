@@ -47,7 +47,8 @@ function secView(){
  const list=mySecs();const coachMode=isCoach();
  if(!coachMode&&st.me.status!=='active')return teamView();
  if(!list.length&&!coachMode){st.sec='club';}
- const chips=list.map(id=>secChip(id,st.sec===id,'secPick')).join('')+(coachMode?'':`<button class="chip ${st.sec==='club'?'on':''}" onclick="secPick('club')">${ic('users',16)} Клуб</button>`);
+ const club=`<button class="chip ${st.sec==='club'||!st.sec?'on':''}" onclick="secPick('club')">${ic('users',16)} Клуб</button>`;
+ const chips=club+list.map(id=>secChip(id,st.sec===id,'secPick')).join('');
  let h=`<div class="stack"><div class="chips scroll">${chips}</div>`;
  if(st.sec==='club'||!st.sec){if(!list.length&&!coachMode)h+=`<div class="note">${ic('info',20)}<span>Оберіть секцію і натисніть «Записатися», щоб бачити дошку тренера.</span></div>`;return h+teamView()+'</div>'}
  const sec=st.sec,s=secInfo(sec),cc=canCoach(sec),mine=inSec(sec);
@@ -62,6 +63,7 @@ function secView(){
  if(memberSecs().includes(sec)&&!coachMode)h+=`<button class="btn t" onclick="secLeave(this,'${sec}')">Покинути секцію</button>`;
  return h+'</div>'}
 function secPick(id){st.sec=id;if(id!=='club'&&st.secSeg==='people'&&!canCoach(id))st.secSeg='board';render()}
+function goClub(seg){st.sec='club';if(seg)st.teamSeg=seg;go('sec')}
 function secSegSet(v){st.secSeg=v;render()}
 async function secJoin(btn,sec){await busy(btn,async()=>{D(await sb.rpc('join_section',{sec}));await loadSections();render();toast('Вас записано до секції «'+secInfo(sec).name+'»')})}
 async function secLeave(btn,sec){if(!confirm('Покинути секцію «'+secInfo(sec).name+'»? Дошку і рейтинг ви більше не бачитимете.'))return;await busy(btn,async()=>{D(await sb.rpc('leave_section',{sec}));await loadSections();render();toast('Ви покинули секцію')})}
