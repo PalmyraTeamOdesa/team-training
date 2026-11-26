@@ -1,7 +1,8 @@
 /* ---------- PROFILE ---------- */
 SHEETS.profile=()=>{const p=me();const coach=isCoach();
  const sw=st.coach?(coach?li({left:`<span class="ico a">${ic('bike',20)}</span>`,t:'Мій кабінет спортсмена',s:'Ваш власний план і щоденник',on:'toSelf(this)'}):li({left:`<span class="ico a">${ic('users',20)}</span>`,t:'Повернутися в режим тренера',s:'Команда, запити, бібліотека',on:'toCoach()'})):'';
- const rows=coach?[['user','Мої дані',esc(p.name),'pdata'],['bell','Нагадування','Сповіщення в застосунку','premind'],['lock','Змінити пароль','','password']]:[
+ const rows=coach?[['users','Люди клубу','Список, ролі, нагороди, пауза','people',"closeAll();go('team')"],['trophy','Нагороди й бали',rewardsSummary(),'myrewards','openRewards()'],['user','Мої дані',esc(p.name),'pdata'],['bell','Нагадування','Сповіщення в застосунку','premind'],['lock','Змінити пароль','','password']]:[
+  ['trophy','Нагороди й бали',rewardsSummary(),'myrewards','openRewards()'],
   ['user','Мої дані',`${p.age} р. · ${p.height} см · ${String(p.weight).replace('.',',')} кг`,'pdata'],
   ['target','Цілі',p.goals.map(g=>GOALS[g]).join(', ')||'—','pgoals'],
   ['gauge','Зони',p.form.ftp?'Розраховано з FTP '+p.form.ftp+' Вт':'Після тесту FTP','zones'],
@@ -15,9 +16,9 @@ SHEETS.profile=()=>{const p=me();const coach=isCoach();
  const inst=instMenuRow();if(inst)rows.push(inst);
  return {title:'Профіль',full:true,body:`<div class="stack"><div class="row12"><span class="av lg ${st.coach?'me':''}">${esc(p.ini)}</span><div class="grow"><div class="t20">${esc(p.name)}</div><div class="t14 sec">${st.coach?'Головний тренер · TRITON':esc(p.group)+(p.city?' · '+esc(p.city):'')}</div><div class="t12 ter">${esc(st.user.email||'')}</div></div></div>
  ${sw?`<div class="list">${sw}</div>`:''}
- <div class="list">${rows.map(r=>li({left:`<span class="ico">${ic(r[0],20)}</span>`,t:r[1],s:r[2],on:r[3]==='pexport'?'exportData(this)':r[3]==='inst'?'instInstall(this)':`openSheet('${r[3]}')`})).join('')}</div>
+ <div class="list">${rows.map(r=>li({left:`<span class="ico">${ic(r[0],20)}</span>`,t:r[1],s:r[2],on:r[4]||(r[3]==='pexport'?'exportData(this)':r[3]==='inst'?'instInstall(this)':`openSheet('${r[3]}')`)})).join('')}</div>
  <button class="btn d" onclick="logout()">${ic('logout',20)} Вийти</button><div class="t12 ter center">TRITON Team · версія ${APP_VERSION}</div></div>`}};
-async function toSelf(btn){await busy(btn,async()=>{st.coachSelf=true;await loadMine();await loadTeam();st.tab='today';closeAll();render._k='';if(!st.me.days.some(d=>d.acts.length)){toast('Заповніть свою анкету, щоб отримати план','info');startOnb();return}render()})}
+async function toSelf(btn){await busy(btn,async()=>{st.coachSelf=true;await loadMine();await loadTeam();st.tab='today';closeAll();render._k='';if(!st.me.days.some(d=>d.acts.length)){if(memberSecs().length){st.tab='sec';render();toast('Це ваш кабінет спортсмена. Анкету й план можна заповнити пізніше','info');return}toast('Заповніть свою анкету, щоб отримати план','info');startOnb();return}render()})}
 function toCoach(){st.coachSelf=false;closeAll();render._k='';render()}
 function pf(label,key,attrs){const p=me();return `<div class="field"><label>${label}</label><input class="inp" value="${esc(p[key])}" ${attrs||''} oninput="me()['${key}']=this.value"></div>`}
 SHEETS.pdata=()=>{const p=me();return {title:'Мої дані',body:`<div class="stack">${pf('Імʼя і прізвище','name','maxlength="80"')}
@@ -138,7 +139,7 @@ async function exportData(btn){await busy(btn,async()=>{const uid=st.me.id;const
  downloadText('triton_moi_dani.json',JSON.stringify(out,null,2),'application/json');toast('Дані збережено у файл')})}
 
 /* ---------- NOTIFICATIONS ---------- */
-const N_IC={request:'inbox',wellness:'alert',skip:'info',award:'trophy',comment:'msg',dm:'msg',announce:'mega',join:'users',redflag:'alert',board:'list',board_mark:'check',points:'star'};
+const N_IC={request:'inbox',wellness:'alert',skip:'info',award:'trophy',comment:'msg',dm:'msg',announce:'mega',join:'users',redflag:'alert',board:'list',board_mark:'check',points:'star',pause:'clock'};
 SHEETS.notifs=()=>{const list=st.notifs;const unread=list.filter(n=>!n.read).map(n=>n.id);if(unread.length)setTimeout(async()=>{await sb.from('notifications').update({read:true}).in('id',unread);list.forEach(n=>n.read=true);render()},1200);
  return {title:'Сповіщення',body:list.length?`<div class="list">${list.map(n=>`<div class="li" style="align-items:flex-start"><span class="ico ${n.read?'':'a'}">${ic(N_IC[n.kind]||'bell',20)}</span><div class="grow"><div class="t14 w6">${esc(n.title)}</div>${n.body?`<div class="t12 sec">${esc(n.body)}</div>`:''}</div><span class="t12 ter">${ago(n.created_at)}</span></div>`).join('')}</div>`:emptyBox('Нових сповіщень немає')}};
 

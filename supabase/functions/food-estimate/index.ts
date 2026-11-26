@@ -65,6 +65,15 @@ Deno.serve(async (req) => {
   const { data: u, error: ue } = await userClient.auth.getUser(auth.replace(/^Bearer\s+/i, ""));
   if (ue || !u?.user) return json({ error: "unauthorized" }, 401);
   const uid = u.user.id;
+  {
+    // only approved members (status=active) and the admin may use the assistant: pending / blocked accounts get 403
+    const svc = createClient(url, service, { auth: { persistSession: false } });
+    const [{ data: pr }, { data: co }] = await Promise.all([
+      svc.from("profiles").select("status").eq("id", uid).maybeSingle(),
+      svc.from("coaches").select("user_id").eq("user_id", uid).maybeSingle(),
+    ]);
+    if (!co && pr?.status !== "active") return json({ error: "forbidden" }, 403);
+  }
 
   let body: { parts?: string[] } = {};
   try { body = await req.json(); } catch { return json({ error: "bad json" }, 400); }

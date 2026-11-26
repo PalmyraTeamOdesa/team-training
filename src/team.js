@@ -69,7 +69,7 @@ function msgBubble(m,showWho){const mine=m.sender_id===st.me.id;if(m.kind==='ann
  return `<div class="msg ${mine?'me':'them'}">${!mine&&showWho?`<div class="who">${esc(nameOf(m.sender_id).split(' ')[0])} · ${hhmm(m.created_at)}</div>`:''}<span style="white-space:pre-line">${esc(m.body)}</span></div>`}
 function chatBody(){const cid=coachId();
  let h=seg([['team','Команда'],['coach','Тренер']],st.chatSeg,'chatSeg');
- if(st.chatSeg==='coach')return h+dmThread(cid);
+ if(st.chatSeg==='coach')return h+coachesCard(null,'Тренери клубу')+dmThread(cid);
  return h+`<div class="s8" style="display:flex;flex-direction:column">${st.chat.length?st.chat.slice(-100).map(m=>msgBubble(m,true)).join(''):emptyBox('Напишіть першим','Тут спілкується вся команда')}</div>
  <div class="composer"><input class="inp" id="tchat" maxlength="4000" placeholder="Повідомлення команді" onkeydown="if(event.key==='Enter')sendTeam(this)"><button class="sendb" onclick="sendTeam(this)" aria-label="Надіслати">${ic('send',20)}</button></div>`}
 function chatSeg(v){st.chatSeg=v;render()}

@@ -2,6 +2,7 @@
 //  - register: creates an already-confirmed email+password user (built-in SMTP can only mail team members),
 //    new members start as status='pending' until the coach approves them.
 //  - coach_set_password: the admin sets a temporary password for an athlete who forgot theirs.
+//  - admin_expel / admin_restore: the admin removes a person from the club (keeps history) or brings them back.
 //  - admin_create_user: the admin creates an approved account (optionally as section coach / member) with a temp password.
 import { createClient } from "npm:@supabase/supabase-js@2.119.2";
 
@@ -80,6 +81,30 @@ Deno.serve(async (req) => {
     if (coachOf.length) await admin.from("section_coaches").insert(coachOf.map((s) => ({ section_id: s, user_id: id })));
     if (memberOf.length) await admin.from("section_members").insert(memberOf.map((s) => ({ section_id: s, athlete_id: id })));
     return json({ ok: true, id, password: temp });
+  }
+  if (b.action === "admin_expel" || b.action === "admin_restore") {
+    // expel: remove section roles, status=blocked, ban the login; history (logs, marks, points, awards) is kept
+    const token = (req.headers.get("Authorization") ?? "").replace(/^Bearer\s+/i, "");
+    const { data: u } = await admin.auth.getUser(token);
+    if (!u?.user) return json({ error: "unauthorized" }, 401);
+    const { data: c } = await admin.from("coaches").select("user_id").eq("user_id", u.user.id).maybeSingle();
+    if (!c) return json({ error: "Лише адміністратор може виключати людей" }, 403);
+    const target = String(b.user_id ?? "");
+    if (!/^[0-9a-f-]{36}$/i.test(target)) return json({ error: "bad id" }, 400);
+    const { data: tc } = await admin.from("coaches").select("user_id").eq("user_id", target).maybeSingle();
+    if (tc) return json({ error: "Адміністратора виключити не можна" }, 403);
+    if (b.action === "admin_expel") {
+      await admin.from("section_coaches").delete().eq("user_id", target);
+      await admin.from("section_members").delete().eq("athlete_id", target);
+      await admin.from("profiles").update({ status: "blocked", paused: false, paused_note: "", paused_at: null }).eq("id", target);
+      const { error } = await admin.auth.admin.updateUserById(target, { ban_duration: "876000h" });
+      if (error) return json({ error: "Не вдалося закрити вхід" }, 400);
+    } else {
+      await admin.from("profiles").update({ status: "active" }).eq("id", target);
+      const { error } = await admin.auth.admin.updateUserById(target, { ban_duration: "none" });
+      if (error) return json({ error: "Не вдалося відновити вхід" }, 400);
+    }
+    return json({ ok: true });
   }
   return json({ error: "unknown action" }, 400);
 });

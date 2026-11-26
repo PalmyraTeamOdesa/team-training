@@ -2,7 +2,7 @@
 const DEF_SPORTS=()=>({bike:{on:true,types:['road'],level:'beg',own:false},run:{on:false,level:'beg',own:false},swim:{on:false,level:'beg',own:false},gym:{on:false,level:'beg',own:false}});
 function toP(r){const q=r.q||{};const name=(r.full_name||'').trim()||'Без імені';
  return {id:r.id,name,short:(cleanName(name)||name).split(' ')[0],ini:initials(name),sex:r.sex||'m',age:r.age||30,height:r.height_cm||175,weight:+r.weight_kg||75,city:r.city||'',
-  group:r.group_name,status:r.status,onboarded:r.onboarded,hide:r.hide_numbers,consent:r.consent,created:r.created_at,avatar:r.avatar_path,
+  group:r.group_name,status:r.status,onboarded:r.onboarded,hide:r.hide_numbers,consent:r.consent,paused:!!r.paused,pausedNote:r.paused_note||'',created:r.created_at,avatar:r.avatar_path,
   sports:Object.assign(DEF_SPORTS(),q.sports||{}),goals:q.goals||['endur'],targets:q.targets||{},days:q.days||days([null,null,null,null,null,null,null]),
   equip:q.equip||[],form:q.form||{},health:q.health||{inj:[],bp:'norm',notes:''},remind:q.remind||'07:00',races:q.races||[],ftpHist:q.ftpHist||[],remindOn:q.remindOn||{workout:true,morning:true,water:false,weekly:true},row:r}}
 function qOf(p){return {sports:p.sports,goals:p.goals,targets:p.targets,days:p.days,equip:p.equip,form:p.form,health:p.health,remind:p.remind,races:p.races,ftpHist:p.ftpHist,remindOn:p.remindOn}}

@@ -60,7 +60,7 @@ iosshare:'<path d="M12 3v11"/><path d="m8 7 4-4 4 4"/><path d="M5 11v8a2 2 0 0 0
 copy:'<rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>',
 homeplus:'<rect x="4" y="4" width="16" height="16" rx="3"/><path d="M12 8v8M8 12h8"/>'
 };
-function ic(n,s){s=s||20;return `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${I[n]||''}</svg>`}
+function ic(n,s){s=s||20;if(n&&!I[n]&&!/^[a-z0-9_-]+$/i.test(n))return `<span class="emo" style="font-size:${Math.round(s*.9)}px" aria-hidden="true">${esc(n)}</span>`;return `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${I[n]||''}</svg>`}
 
 const DAYS=['Пн','Вт','Ср','Чт','Пт','Сб','Нд'];
 const DAYS_FULL=['Понеділок','Вівторок','Середа','Четвер','Пʼятниця','Субота','Неділя'];

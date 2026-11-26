@@ -9,12 +9,13 @@ function secInfo(id){const s=st.secs.find(x=>x.id===id);return Object.assign({id
 function isAdmin(){return !!st.coach}
 function coachSecs(uid){uid=uid||st.me.id;return st.secCoaches.filter(c=>c.user_id===uid).map(c=>c.section_id)}
 function memberSecs(uid){uid=uid||st.me.id;return st.secMembers.filter(m=>m.athlete_id===uid).map(m=>m.section_id)}
-function canCoach(sec){return isAdmin()||coachSecs().includes(sec)}
-function mySecs(){const s=isAdmin()?SEC_ORDER.slice():[...new Set([...coachSecs(),...memberSecs()])];return SEC_ORDER.filter(x=>s.includes(x))}
+function canCoach(sec){return isCoach()||coachSecs().includes(sec)}
+function mySecs(){const s=isCoach()?SEC_ORDER.slice():[...new Set([...coachSecs(),...memberSecs()])];return SEC_ORDER.filter(x=>s.includes(x))}
 function secAthletes(sec){return st.secMembers.filter(m=>m.section_id===sec).map(m=>m.athlete_id)}
+function secLiveAthletes(sec){return secAthletes(sec).filter(id=>!isPausedId(id))}
 function secCoachIds(sec){return st.secCoaches.filter(c=>c.section_id===sec).map(c=>c.user_id)}
 /* sports where this athlete is in a section that has a coach → auto-plan off for that sport */
-function coachedSports(pid){return memberSecs(pid).filter(s=>secCoachIds(s).length).map(s=>secInfo(s).sport||s)}
+function coachedSports(pid){return memberSecs(pid).filter(s=>secCoachIds(s).some(c=>c!==pid)).map(s=>secInfo(s).sport||s)}
 function pEff(p){if(!p)return p;const cs=coachedSports(p.id);if(!cs.length)return p;const sp={};Object.keys(p.sports).forEach(k=>sp[k]=Object.assign({},p.sports[k],cs.includes(k)?{own:true}:{}));return Object.assign({},p,{sports:sp})}
 function isoAdd(s,n){const d=parseIso(s);return iso(new Date(d.getFullYear(),d.getMonth(),d.getDate()+n))}
 function todayIso(){return dayIso(0,TODAY)}
@@ -29,6 +30,8 @@ async function loadSections(){
  const [s,c,m,p]=await Promise.all([sb.from('sections').select('*').order('sort'),sb.from('section_coaches').select('*'),sb.from('section_members').select('*'),sb.from('coach_athlete_prefs').select('*')]);
  st.secs=D(s)||[];st.secCoaches=D(c)||[];st.secMembers=D(m)||[];st.capPrefs={};(D(p)||[]).forEach(x=>st.capPrefs[x.athlete_id]=x.show_full);
  if(!st.sec||(st.sec!=='club'&&!mySecs().includes(st.sec)))st.sec=mySecs()[0]||'club';
+
+ try{st.myPts=D(await sb.from('board_points').select('*').eq('athlete_id',st.me.id).order('created_at',{ascending:false}).limit(100))||[]}catch(e){}
  await loadMyLines()}
 async function loadMyLines(){if(!st.me||!memberSecs().length){st.myLines=[];return}
  const r=await sb.from('board_lines').select('*, board_posts!inner(id,section_id,day,plan,author_id,board_marks(*))').eq('athlete_id',st.me.id).gte('board_posts.day',isoAdd(todayIso(),-1)).lte('board_posts.day',isoAdd(todayIso(),7));
@@ -48,7 +51,8 @@ function secView(){
  if(st.sec==='club'||!st.sec){if(!list.length&&!coachMode)h+=`<div class="note">${ic('info',20)}<span>Вас ще не додали до секції. Коли адміністратор додасть, тут зʼявиться дошка тренера.</span></div>`;return h+teamView()+'</div>'}
  const sec=st.sec,s=secInfo(sec),cc=canCoach(sec);
  const coaches=secCoachIds(sec);
- h+=`<div class="sechero" style="--sc:${s.color}"><span class="secico">${ic(s.icon,22)}</span><div class="grow"><div class="t16 w7">${esc(s.name)}</div><div class="t12 sec ell">${coaches.length?'Тренер: '+coaches.map(id=>esc(cleanName(nameOf(id)))).join(', '):'Тренера ще не призначено'} · ${secAthletes(sec).length} спортсм.</div></div>${cc?tag(isAdmin()?'адмін':'тренер','a'):''}</div>`;
+ h+=`<div class="sechero" style="--sc:${s.color}"><span class="secico">${ic(s.icon,22)}</span><div class="grow"><div class="t16 w7">${esc(s.name)}</div><div class="t12 sec ell">${coaches.length?'Тренер: '+coaches.map(id=>esc(cleanName(nameOf(id)))).join(', '):'Тренера ще не призначено'} · ${secAthletes(sec).length} спортсм.</div></div>${cc?tag(isCoach()?'адмін':'тренер','a'):''}</div>`;
+ if(!cc)h+=coachesCard(sec,'Тренери секції');
  const segs=[['board','Дошка'],['rate','Рейтинг']];if(cc)segs.push(['people','Учасники']);
  h+=seg(segs,st.secSeg,'secSegSet');
  h+=({board:boardBody,rate:secRateBody,people:secPeopleBody})[st.secSeg]?.(sec)||'';
@@ -80,14 +84,15 @@ function bdNav(n){st.bDay=isoAdd(st.bDay||todayIso(),n);render()}
 function bdToday(){st.bDay=todayIso();render()}
 
 /* coach summary under the board */
-function bdSummary(sec,b){const ids=[...new Set([...(b.board_lines||[]).map(l=>l.athlete_id),...secAthletes(sec)])];const marks=b.board_marks||[];const pts=b.board_points||[];
+function bdSummary(sec,b){const paused=secAthletes(sec).filter(isPausedId);const ids=sortPeople([...new Set([...(b.board_lines||[]).map(l=>l.athlete_id),...secLiveAthletes(sec)])].filter(id=>!isPausedId(id)));const marks=b.board_marks||[];const pts=b.board_points||[];
  const cnt=k=>marks.filter(m=>m.status===k).length;const none=ids.filter(id=>!marks.some(m=>m.athlete_id===id));
  let h=`<div class="s8"><div class="over">Підсумок · відмітились ${marks.length} з ${ids.length}</div>
   <div class="grid3"><div class="tile"><div class="v c-ok">${cnt('done')}</div><div class="l">✅ виконали</div></div><div class="tile"><div class="v c-warn">${cnt('alt')}</div><div class="l">🔁 інакше</div></div><div class="tile"><div class="v c-bad">${cnt('skip')}</div><div class="l">❌ пропуск</div></div></div>`;
  h+=`<div class="list">${ids.map(id=>{const m=marks.find(x=>x.athlete_id===id);const line=(b.board_lines||[]).find(l=>l.athlete_id===id);const pp=pts.filter(p=>p.athlete_id===id);const sum=pp.reduce((a,p)=>a+p.points,0);
-  return `<div class="li" style="align-items:flex-start;padding-top:10px;padding-bottom:10px">${avOf(id)}<div class="grow" style="min-width:0"><div class="t14 w6 ell">${esc(cleanName(nameOf(id)))} ${m?MARK[m.status][0]:'<span class="t12 ter">не відмітився</span>'}</div>${line?`<div class="t12 sec ell">${esc(line.text)}</div>`:''}${m&&m.comment?`<div class="t12" style="margin-top:2px">«${esc(m.comment)}»</div>`:''}${m?markNums(m):''}${pp.length?`<div class="t12 acc" style="margin-top:2px">${sum?'+'+sum+' балів ':''}${esc(pp.map(p=>p.reaction).filter(Boolean).join(' '))}</div>`:''}</div>
-   <div class="row" style="gap:4px"><button class="ib" onclick="bdReact(this,'${sec}',${b.id},'${id}')" aria-label="Молодець" title="🔥 Молодець">🔥</button><button class="ib" onclick="openSheet('bdPoints',{sec:'${sec}',post:${b.id},id:'${id}'})" aria-label="Бали">${ic('plus',18)}</button><button class="ib" onclick="openSheet('secAward',{sec:'${sec}',id:'${id}'})" aria-label="Нагорода">${ic('trophy',18)}</button></div></div>`}).join('')||'<div class="li"><div class="grow t14 ter">У секції ще немає спортсменів</div></div>'}</div>`;
+  return `<div class="li" style="align-items:flex-start;padding-top:10px;padding-bottom:10px">${avOf(id)}<div class="grow" style="min-width:0"><div class="t14 w6 ell">${esc(cleanName(nameOf(id)))}${personRank(id)<2?' '+roleBadge(id):''} ${m?MARK[m.status][0]:'<span class="t12 ter">не відмітився</span>'}</div>${line?`<div class="t12 sec ell">${esc(line.text)}</div>`:''}${m&&m.comment?`<div class="t12" style="margin-top:2px">«${esc(m.comment)}»</div>`:''}${m?markNums(m):''}${pp.length?`<div class="t12 acc" style="margin-top:2px">${sum?'+'+sum+' балів ':''}${esc(pp.map(p=>p.reaction).filter(Boolean).join(' '))}</div>`:''}</div>
+   ${id===st.me.id?'':`<div class="row" style="gap:4px"><button class="ib" onclick="bdReact(this,'${sec}',${b.id},'${id}')" aria-label="Молодець" title="🔥 Молодець">🔥</button><button class="ib" onclick="openSheet('bdPoints',{sec:'${sec}',post:${b.id},id:'${id}'})" aria-label="Бали">${ic('plus',18)}</button><button class="ib" onclick="openSheet('secAward',{sec:'${sec}',id:'${id}'})" aria-label="Нагорода">${ic('trophy',18)}</button></div>`}</div>`}).join('')||'<div class="li"><div class="grow t14 ter">У секції ще немає спортсменів</div></div>'}</div>`;
  if(none.length&&ids.length)h+=`<div class="t12 ter">Не відмітились: ${none.map(id=>esc(shortName(id))).join(', ')}</div>`;
+ if(paused.length)h+=`<div class="t12 ter">На паузі (не враховуються): ${paused.map(id=>esc(shortName(id))).join(', ')}</div>`;
  return h+'</div>'}
 async function bdReact(btn,sec,post,id){await busy(btn,async()=>{D(await sb.from('board_points').insert({section_id:sec,post_id:post,athlete_id:id,points:0,reaction:'🔥 Молодець'}));await loadBoard(sec,st.bDay,true);render();toast('🔥 Молодець — надіслано')})}
 SHEETS.bdPoints=a=>{st._pts=st._pts||{n:5};return {title:'Бали · '+esc(shortName(a.id)),body:`<div class="stack">${nf({id:'ptsn',label:'Скільки балів',val:st._pts.n,min:1,max:50,step:1,unit:'балів',plus:true,set:v=>st._pts.n=v})}
@@ -127,7 +132,7 @@ const DIM={'саша':'олександр','сашко':'олександр','ш
 function nmNorm(s){return String(s||'').toLowerCase().replace(/ё/g,'е').replace(/[’ʼ'`]/g,'').trim()}
 /* candidates for a typed name among section members */
 function nameCands(sec,raw){const t=nmNorm(raw);if(t.length<2)return [];const dim=DIM[t];
- const sc=secAthletes(sec).map(id=>{const full=nmNorm(cleanName(nameOf(id)));const parts=full.split(/\s+/);let s=0;
+ const sc=secLiveAthletes(sec).map(id=>{const full=nmNorm(cleanName(nameOf(id)));const parts=full.split(/\s+/);let s=0;
   if(full===t)s=100;else if(parts.includes(t))s=90;else if(dim&&parts.some(p=>p.startsWith(dim)))s=80;
   else if(parts.some(p=>p.startsWith(t)&&t.length>=3))s=70;
   else{const cp=Math.max(...parts.map(p=>{let k=0;while(k<p.length&&k<t.length&&p[k]===t[k])k++;return k}));if(cp>=4||(cp>=3&&t.length<=4))s=40+cp}
@@ -155,12 +160,12 @@ function bdPreview(){const be=st._be;const rows=parseBoardLines(be.sec,be.lines)
  return `<div class="list">${rows.map(r=>{
   if(r.bad)return `<div class="li" style="min-height:44px"><div class="grow t14 c-warn">«${esc(r.raw)}» — додайте «Імʼя:» на початку</div></div>`;
   if(r.id)return `<div class="li" style="min-height:44px"><span class="c-ok">${ic('check',18)}</span><div class="grow t14"><b class="w6">${esc(cleanName(nameOf(r.id)))}</b> · ${esc(r.text)}</div>${r.cands.length>1?`<button class="btn t sm" onclick="bdUnpick(${r.i})">змінити</button>`:''}</div>`;
-  const opts=(r.cands.length?r.cands.map(c=>c.id):secAthletes(be.sec));
+  const opts=(r.cands.length?r.cands.map(c=>c.id):secLiveAthletes(be.sec));
   return `<div class="li" style="min-height:44px;flex-wrap:wrap;align-items:flex-start;padding:8px 12px"><div class="grow t14 c-warn" style="flex-basis:100%">${r.cands.length?'Хто це «'+esc(r.name)+'»?':'Не знайшли «'+esc(r.name)+'» у секції — оберіть:'}</div><div class="chips" style="margin-top:6px">${opts.map(id=>`<button class="chip" onclick="bdPick(${r.i},'${id}')">${esc(cleanName(nameOf(id)))}</button>`).join('')||'<span class="t12 ter">У секції ще немає спортсменів</span>'}</div></div>`}).join('')}</div>`}
 function bdPick(i,id){st._be.pick[i]=id;const el=$('#beprev');if(el)el.innerHTML=bdPreview()}
 function bdUnpick(i){st._be.pick[i]='__none__';const el=$('#beprev');if(el)el.innerHTML=bdPreview()}
 function bdLinesInput(ta){const be=st._be;be.lines=ta.value;const pos=ta.selectionStart||0;const before=ta.value.slice(0,pos);const lineStart=before.lastIndexOf('\n')+1;const cur=before.slice(lineStart);
- const sug=$('#besug');if(sug){if(cur.length>=1&&!/[:—–]/.test(cur)){const t=nmNorm(cur);const ids=secAthletes(be.sec).filter(id=>{const n=nmNorm(cleanName(nameOf(id)));return n.split(/\s+/).some(p=>p.startsWith(t))||(DIM[t]&&n.includes(DIM[t]))||nameCands(be.sec,cur).some(c=>c.id===id)}).slice(0,6);
+ const sug=$('#besug');if(sug){if(cur.length>=1&&!/[:—–]/.test(cur)){const t=nmNorm(cur);const ids=secLiveAthletes(be.sec).filter(id=>{const n=nmNorm(cleanName(nameOf(id)));return n.split(/\s+/).some(p=>p.startsWith(t))||(DIM[t]&&n.includes(DIM[t]))||nameCands(be.sec,cur).some(c=>c.id===id)}).slice(0,6);
    sug.innerHTML=ids.map(id=>`<button class="chip" onmousedown="event.preventDefault()" onclick="bdSug('${id}')">${esc(cleanName(nameOf(id)))}</button>`).join('')}else if(!cur.length){sug.innerHTML=secAthletes(be.sec).filter(id=>!parseBoardLines(be.sec,be.lines).some(r=>r.id===id)).slice(0,8).map(id=>`<button class="chip" onmousedown="event.preventDefault()" onclick="bdSug('${id}')">+ ${esc(shortName(id))}</button>`).join('')}else sug.innerHTML=''}
  const pv=$('#beprev');if(pv)pv.innerHTML=bdPreview()}
 function bdSug(id){const ta=$('#bel');if(!ta)return;const v=ta.value;const pos=ta.selectionStart??v.length;const ls=v.lastIndexOf('\n',pos-1)+1;let le=v.indexOf('\n',pos);if(le<0)le=v.length;
@@ -191,19 +196,22 @@ function secRateBody(sec){const k=sec+'|'+wkIso(0);const r=st.secRate[k];
  return h+`<div class="list">${r.map((a,k)=>`<div class="li" style="${a.athlete_id===uid?'background:color-mix(in srgb,'+s.color+' 14%,transparent)':''}"><div class="t16 num ${k<3?'acc':'ter'}" style="width:20px;text-align:center">${k+1}</div>${avOf(a.athlete_id)}<div class="grow" style="min-width:0"><div class="t14 w6 ell">${esc(cleanName(a.full_name))}${a.athlete_id===uid?' · ви':''}</div><div class="t12 sec">виконано ${a.done}/${a.assigned}${a.assigned?' · '+a.pct+'%':''}</div></div><div class="t16 num w7">${a.points}<span class="t12 ter"> б.</span></div></div>`).join('')}</div>`}
 
 /* --- people (coach/admin) --- */
-function secPeopleBody(sec){const ids=secAthletes(sec);const coaches=secCoachIds(sec);const adm=isAdmin();const selfCoach=coachSecs().includes(sec);
+function secPeopleBody(sec){const ids=sortPeople(secAthletes(sec));const coaches=sortPeople(secCoachIds(sec));const adm=isCoach();const selfCoach=coachSecs().includes(sec);
+ const nm=id=>`<div class="row" style="gap:6px;flex-wrap:wrap"><b class="t14 w6">${esc(cleanName(nameOf(id)))}${id===st.me.id?' · ви':''}</b>${roleBadge(id)}${isPausedId(id)?'<span class="rb pz">пауза</span>':''}</div>`;
+ const dm=id=>id!==st.me.id?`<button class="ib" onclick="openDm('${id}')" aria-label="Написати">${ic('msg',20)}</button>`:'';
  let h='';
- if(adm){h+=`<div class="s8"><div class="over">Тренери секції</div><div class="list">${coaches.map(id=>`<div class="li">${avOf(id)}<div class="grow t14 w6 ell">${esc(cleanName(nameOf(id)))}</div><button class="ib" onclick="secRemoveCoach(this,'${sec}','${id}')" aria-label="Прибрати тренера">${ic('x',18)}</button></div>`).join('')||'<div class="li"><div class="grow t14 ter">Тренера ще не призначено</div></div>'}</div>
-  <div class="row" style="gap:8px"><button class="btn s sm grow" onclick="openSheet('secPick',{sec:'${sec}',role:'coach'})">${ic('plus',18)} Призначити тренера</button><button class="btn s sm grow" onclick="openSheet('secNewUser',{sec:'${sec}'})">${ic('user',18)} Новий акаунт</button></div></div>`}
- h+=`<div class="s8"><div class="over">Спортсмени · ${ids.length}</div><div class="list">${ids.map(id=>`<div class="li">${avOf(id)}<button class="grow" style="background:none;border:0;text-align:left;color:inherit;min-width:0" onclick="${adm?`openSheet('athlete','${id}')`:`openSheet('secAth',{sec:'${sec}',id:'${id}'})`}"><div class="t14 w6 ell">${esc(cleanName(nameOf(id)))}</div><div class="t12 sec ell">${memberSecs(id).filter(x=>x!==sec).map(x=>secInfo(x).name).join(', ')||'лише ця секція'}</div></button>
+ if(adm){h+=`<div class="s8"><div class="over">Тренери секції</div><div class="list">${coaches.map(id=>`<div class="li crow"><span class="av sm me">${esc(initials(nameOf(id)))}</span><button class="pmain" onclick="openSheet('person','${id}')"><span class="grow" style="min-width:0">${nm(id)}</span></button>${dm(id)}<button class="ib" onclick="secRemoveCoach(this,'${sec}','${id}')" aria-label="Прибрати тренера">${ic('x',18)}</button></div>`).join('')||'<div class="li"><div class="grow t14 ter">Тренера ще не призначено</div></div>'}</div>
+  <div class="row" style="gap:8px"><button class="btn s sm grow" onclick="openSheet('secPick',{sec:'${sec}',role:'coach'})">${ic('plus',18)} Призначити тренера</button><button class="btn s sm grow" onclick="openNewPerson()">${ic('user',18)} Новий акаунт</button></div></div>`}
+ h+=`<div class="s8"><div class="over">Спортсмени · ${ids.length}</div><div class="list">${ids.map(id=>{const r=personRank(id);return `<div class="li ${r<2?'crow':''}"><span class="av sm ${r<2?'me':''}">${esc(initials(nameOf(id)))}</span><button class="pmain" onclick="${adm?`openSheet('person','${id}')`:`openSheet('secAth',{sec:'${sec}',id:'${id}'})`}"><span class="grow" style="min-width:0">${nm(id)}<span class="t12 sec ell" style="display:block">${memberSecs(id).filter(x=>x!==sec).map(x=>secInfo(x).name).join(', ')||'лише ця секція'}</span></span></button>
   ${selfCoach&&!adm?`<label class="sw" title="Показувати мені повне навантаження з інших видів спорту"><input type="checkbox" ${st.capPrefs[id]?'checked':''} onchange="secFull(this,'${id}')"><span></span></label>`:''}
-  ${adm?`<button class="ib" onclick="secRemoveMember(this,'${sec}','${id}')" aria-label="Прибрати зі секції">${ic('x',18)}</button>`:''}</div>`).join('')||'<div class="li"><div class="grow t14 ter">Поки нікого</div></div>'}</div>
+  ${dm(id)}${id!==st.me.id?`<button class="ib" onclick="openReward('${id}','${sec}')" aria-label="Нагородити">${ic('trophy',18)}</button>`:''}
+  ${adm?`<button class="ib" onclick="secRemoveMember(this,'${sec}','${id}')" aria-label="Прибрати зі секції">${ic('x',18)}</button>`:''}</div>`}).join('')||'<div class="li"><div class="grow t14 ter">Поки нікого</div></div>'}</div>
   ${selfCoach&&!adm?`<div class="t12 ter">Перемикач праворуч — «показувати мені повне навантаження» спортсмена з інших видів спорту. Його бачите лише ви.</div>`:''}
   ${adm?`<button class="btn s sm" onclick="openSheet('secPick',{sec:'${sec}',role:'member'})">${ic('plus',18)} Додати спортсменів</button>`:''}</div>`;
  return h}
 async function secFull(el,id){try{D(await sb.from('coach_athlete_prefs').upsert({coach_id:st.me.id,athlete_id:id,show_full:el.checked},{onConflict:'coach_id,athlete_id'}));st.capPrefs[id]=el.checked;toast(el.checked?'Повне навантаження показується':'Лише ця секція')}catch(e){el.checked=!el.checked;fail(e)}}
-function activeAccounts(){const ids=new Map();(st.athletes||[]).filter(a=>a.status==='active').forEach(a=>ids.set(a.id,a.name));st.members.forEach(m=>{if(!m.is_coach)ids.set(m.id,m.full_name)});return [...ids.entries()].map(([id,name])=>({id,name}))}
-SHEETS.secPick=a=>{const s=secInfo(a.sec);const have=a.role==='coach'?secCoachIds(a.sec):secAthletes(a.sec);const list=activeAccounts().filter(x=>!have.includes(x.id)).sort((x,y)=>cleanName(x.name).localeCompare(cleanName(y.name)));st._sel=new Set();
+function activeAccounts(){const ids=new Map();(st.athletes||[]).filter(a=>a.status==='active').forEach(a=>ids.set(a.id,a.name));st.members.forEach(m=>{ids.set(m.id,m.full_name)});return [...ids.entries()].map(([id,name])=>({id,name}))}
+SHEETS.secPick=a=>{const s=secInfo(a.sec);const have=a.role==='coach'?secCoachIds(a.sec):secAthletes(a.sec);const list=sortPeople(activeAccounts().filter(x=>!have.includes(x.id)).map(x=>x.id)).map(id=>({id,name:nameOf(id)}));st._sel=new Set();
  return {title:(a.role==='coach'?'Тренер · ':'Спортсмени · ')+esc(s.name),body:`<div class="stack"><div class="t14 sec">${a.role==='coach'?'Оберіть підтверджений акаунт. Тренер зможе писати плани лише цієї секції і не зможе додавати людей.':'Оберіть підтверджених спортсменів.'}</div>
  <div class="list">${list.map(x=>`<label class="li" style="cursor:pointer"><input type="checkbox" onchange="this.checked?st._sel.add('${x.id}'):st._sel.delete('${x.id}')" style="width:20px;height:20px"><div class="grow t14 w6 ell">${esc(cleanName(x.name))}</div>${memberSecs(x.id).map(secDot).join('')}</label>`).join('')||'<div class="li"><div class="grow t14 ter">Немає доступних акаунтів</div></div>'}</div></div>`,
  foot:`<button class="btn p" onclick="secAssign(this,'${a.sec}','${a.role}')">Додати</button>`}};
@@ -224,7 +232,7 @@ async function secCreateUser(btn,sec){const role=st._nuRole||'coach';const full_
 
 /* section coach: athlete card (basic; full load only if the coach enabled it) */
 SHEETS.secAth=a=>{const id=a.id;const d=st._secAth[id];if(!d){secAthLoad(id);return {title:esc(cleanName(nameOf(id))),body:`<div class="empty"><span class="spin"></span></div>`}}
- const p=d.prof?toP(d.prof):null;let b=`<div class="stack"><div class="t14 sec">${p?(p.age+' р. · '+Object.keys(p.sports).filter(k=>p.sports[k].on).map(k=>SPORT[k].n).join(', ')):''} · секції: ${memberSecs(id).map(x=>secInfo(x).name).join(', ')}</div>`;
+ const p=d.prof?toP(d.prof):null;let b=`<div class="stack">${id===st.me.id?'':`<div class="row" style="gap:8px"><button class="btn p sm grow" onclick="openDm('${id}')">${ic('msg',18)} Написати</button><button class="btn s sm grow" onclick="openReward('${id}','${a.sec}')">${ic('trophy',18)} Нагородити</button></div>`}<div class="t14 sec">${p?(p.age+' р. · '+Object.keys(p.sports).filter(k=>p.sports[k].on).map(k=>SPORT[k].n).join(', ')):''} · секції: ${memberSecs(id).map(x=>secInfo(x).name).join(', ')}</div>`;
  if(!st.capPrefs[id])b+=`<div class="note">${ic('eyeoff',20)}<span>Повне навантаження з інших видів спорту приховано. Увімкніть перемикач у списку учасників, щоб бачити план і тренування цього спортсмена.</span></div>`;
  else{const pl=d.plan;const logs=d.logs||[];
   b+=`<div class="over">План тижня (усі види спорту)</div>${pl?`<div class="list">${sectionize(planRowToDays(pl),id).filter(x=>!x.rest).map(x=>`<div class="li" style="min-height:44px"><div class="t12 ter" style="width:28px">${DAYS[x.i]}</div><div class="grow t14">${x.items.map(it=>esc(itemName(it))+' · '+fmtMin(it.min)).join('<br>')}</div></div>`).join('')}</div>`:'<div class="t14 ter">Плану на цей тиждень немає</div>'}

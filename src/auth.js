@@ -9,7 +9,7 @@ function authView(){const m=st.authMode;
  <div class="field"><label>Email</label><input class="inp" id="a-email" type="email" autocomplete="email" inputmode="email" placeholder="you@example.com" value="${esc(st._authEmail||'')}"></div>
  ${m!=='forgot'?`<div class="field"><label>Пароль</label><input class="inp" id="a-pass" type="password" autocomplete="${m==='signup'?'new-password':'current-password'}" placeholder="${m==='signup'?'Щонайменше 8 символів':''}" onkeydown="if(event.key==='Enter')authGo(this)"></div>`:''}
  ${m==='forgot'?`<div class="note">${ic('info',20)}<span>Лист для відновлення надсилається лише тренеру. Спортсменам тренер встановить тимчасовий пароль у своєму кабінеті: просто напишіть йому.</span></div>`:''}
- <div class="t14" id="a-err" style="color:var(--bad);min-height:0"></div>
+ <div class="t14" id="a-err" style="color:var(--bad);min-height:0">${esc(st._authMsg||'')}</div>
  <button class="btn p" id="a-btn" onclick="authGo(this)">${{login:'Увійти',signup:'Створити акаунт',forgot:'Надіслати лист'}[m]}</button></div>
  <div class="center s8">${m==='login'?`<button class="btn t" onclick="authMode('signup')">Немає акаунта? Зареєструватися</button><button class="btn t" onclick="authMode('forgot')">Забули пароль?</button>`:`<button class="btn t" onclick="authMode('login')">Уже є акаунт? Увійти</button>`}</div>
  <div class="t12 ter center">Нові учасники потрапляють у команду після підтвердження тренером</div></div></main>`}
@@ -36,6 +36,7 @@ async function startSession(session){
  st.user=session.user;st.screen='boot';render();
  try{await loadAll()}catch(e){fail(e,'Не вдалося завантажити дані. Перевірте інтернет.');}
  if(!st.me){st.screen='auth';render();return}
+ if(st.me.status==='blocked'&&!st.coach){st._authMsg='Доступ до команди закрито адміністратором.';await sb.auth.signOut();return}
  if(!st.coach&&!st.me.onboarded){startOnb();return}
  st.screen='app';if(st.coach)st.ctab='team';render();subscribeLive();
  if(location.hash==='#recovery')openSheet('password');
