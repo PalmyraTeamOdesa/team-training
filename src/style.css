@@ -221,3 +221,13 @@ nav.tabs{padding-bottom:env(safe-area-inset-bottom)}
 .sw input:checked+span::after{transform:translateX(18px);background:var(--acc)}
 
 .logoimg{background:none;border-radius:50%;width:88px;height:88px;object-fit:cover;box-shadow:0 8px 32px rgba(185,155,247,.25)}
+
+/* ---------- install banner & instructions ---------- */
+.instbar{display:flex;align-items:center;gap:6px;padding:8px 4px 8px 12px;border-bottom:1px solid var(--bd);background:linear-gradient(180deg,rgba(124,149,255,.14),var(--s1));flex-shrink:0}
+.instico{width:36px;height:36px;border-radius:10px;background:var(--acc-soft);color:var(--acc);display:grid;place-items:center;flex-shrink:0}
+.instbar .instcta{min-height:36px;height:36px;padding:0 10px;font-size:13px;flex-shrink:0}
+.instx{width:36px;height:36px;flex-shrink:0;color:var(--tx3)}
+.inst-steps{display:flex;flex-direction:column;gap:8px}
+.inst-step{display:flex;align-items:center;gap:12px;padding:14px;border-radius:var(--r);background:var(--s2);border:1px solid var(--bd)}
+.inst-num{width:28px;height:28px;border-radius:14px;background:var(--acc);color:#0B0F1A;font-weight:700;font-size:14px;display:grid;place-items:center;flex-shrink:0}
+.inst-glyph{width:44px;height:44px;border-radius:12px;background:var(--s3);color:var(--tx);display:grid;place-items:center;flex-shrink:0}

@@ -1,7 +1,7 @@
 /* ---------- PROFILE ---------- */
 SHEETS.profile=()=>{const p=me();const coach=isCoach();
  const sw=st.coach?(coach?li({left:`<span class="ico a">${ic('bike',20)}</span>`,t:'Мій кабінет спортсмена',s:'Ваш власний план і щоденник',on:'toSelf(this)'}):li({left:`<span class="ico a">${ic('users',20)}</span>`,t:'Повернутися в режим тренера',s:'Команда, запити, бібліотека',on:'toCoach()'})):'';
- const rows=coach?[['user','Мої дані',esc(p.name),'pdata'],['bell','Нагадування','Сповіщення в застосунку','premind'],['lock','Змінити пароль','','password'],['phone','Додати на головний екран','Працює як застосунок','phome']]:[
+ const rows=coach?[['user','Мої дані',esc(p.name),'pdata'],['bell','Нагадування','Сповіщення в застосунку','premind'],['lock','Змінити пароль','','password']]:[
   ['user','Мої дані',`${p.age} р. · ${p.height} см · ${String(p.weight).replace('.',',')} кг`,'pdata'],
   ['target','Цілі',p.goals.map(g=>GOALS[g]).join(', ')||'—','pgoals'],
   ['gauge','Зони',p.form.ftp?'Розраховано з FTP '+p.form.ftp+' Вт':'Після тесту FTP','zones'],
@@ -11,11 +11,11 @@ SHEETS.profile=()=>{const p=me();const coach=isCoach();
   ['link','Strava, Garmin і файли','Strava і Garmin незабаром · файли вже працюють','pconn'],
   ['eyeoff','Приватність',p.hide?'Цифри приховані':'Цифри видно команді','priv'],
   ['download','Експорт даних','JSON з усіма вашими даними','pexport'],
-  ['lock','Змінити пароль','','password'],
-  ['phone','Додати на головний екран','Працює як застосунок','phome']];
+  ['lock','Змінити пароль','','password']];
+ const inst=instMenuRow();if(inst)rows.push(inst);
  return {title:'Профіль',full:true,body:`<div class="stack"><div class="row12"><span class="av lg ${st.coach?'me':''}">${esc(p.ini)}</span><div class="grow"><div class="t20">${esc(p.name)}</div><div class="t14 sec">${st.coach?'Головний тренер · TRITON':esc(p.group)+(p.city?' · '+esc(p.city):'')}</div><div class="t12 ter">${esc(st.user.email||'')}</div></div></div>
  ${sw?`<div class="list">${sw}</div>`:''}
- <div class="list">${rows.map(r=>li({left:`<span class="ico">${ic(r[0],20)}</span>`,t:r[1],s:r[2],on:r[3]==='pexport'?'exportData(this)':`openSheet('${r[3]}')`})).join('')}</div>
+ <div class="list">${rows.map(r=>li({left:`<span class="ico">${ic(r[0],20)}</span>`,t:r[1],s:r[2],on:r[3]==='pexport'?'exportData(this)':r[3]==='inst'?'instInstall(this)':`openSheet('${r[3]}')`})).join('')}</div>
  <button class="btn d" onclick="logout()">${ic('logout',20)} Вийти</button><div class="t12 ter center">TRITON Team · версія ${APP_VERSION}</div></div>`}};
 async function toSelf(btn){await busy(btn,async()=>{st.coachSelf=true;await loadMine();await loadTeam();st.tab='today';closeAll();render._k='';if(!st.me.days.some(d=>d.acts.length)){toast('Заповніть свою анкету, щоб отримати план','info');startOnb();return}render()})}
 function toCoach(){st.coachSelf=false;closeAll();render._k='';render()}
@@ -52,8 +52,69 @@ SHEETS.pconn=()=>({title:'Strava, Garmin і файли',body:`<div class="stack"
 SHEETS.priv=()=>({title:'Приватність',body:`<div class="stack"><div class="list"><button class="li" onclick="togglePriv(this)"><div class="grow"><div class="t16">Приховати мої цифри</div><div class="t12 sec">Команда бачить тренування без потужності, темпу і дистанції</div></div><span class="tg ${me().hide?'on':''}"></span></button></div>
  <div class="note">${ic('lock',20)}<span>План, анкету, самопочуття, вагу і харчування бачите лише ви і тренер. Команда бачить тільки те, чим ви поділились самі.</span></div></div>`});
 async function togglePriv(btn){await busy(btn,async()=>{me().hide=!me().hide;await saveMe();renderSheet();toast(me().hide?'Цифри приховано':'Цифри видно команді')})}
-SHEETS.phome=()=>({title:'На головний екран',body:`<div class="stack">${window._installEvt?`<button class="btn p" onclick="_installEvt.prompt()">${ic('phone',20)} Встановити застосунок</button>`:''}<div class="card s8"><div class="t16">iPhone</div><div class="t14 sec">Відкрийте в Safari → Поділитися → «На екран Додому»</div></div><div class="card s8"><div class="t16">Android</div><div class="t14 sec">Відкрийте в Chrome → меню ⋮ → «Додати на головний екран»</div></div></div>`});
-addEventListener('beforeinstallprompt',e=>{e.preventDefault();window._installEvt=e});
+/* ---------- INSTALL TO HOME SCREEN ---------- */
+const INST_KEY='triton_inst_hide',INST_DAYS=7;
+function instStandalone(){return !!(window.matchMedia('(display-mode: standalone)').matches||window.matchMedia('(display-mode: fullscreen)').matches||window.matchMedia('(display-mode: minimal-ui)').matches||navigator.standalone)}
+function instInfo(){
+ const ua=navigator.userAgent||'';
+ const iOS=/iPad|iPhone|iPod/.test(ua)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
+ const android=/Android/i.test(ua);
+ const inApp=/FBAN|FBAV|FB_IAB|Instagram|Line\/|Twitter|TikTok|Snapchat|Telegram|; wv\)|WebView/i.test(ua)||(android&&/Version\/[\d.]+/.test(ua)&&/Chrome\//.test(ua)&&/\bwv\b/.test(ua));
+ const iosSafari=iOS&&/Safari/i.test(ua)&&/Version\//i.test(ua)&&!/CriOS|FxiOS|EdgiOS|OPiOS|DuckDuckGo|YaBrowser|EdgA/i.test(ua)&&!/Instagram|FBAN|FBAV|Line\/|Telegram|Twitter/i.test(ua);
+ return {iOS,android,inApp,iosSafari,standalone:instStandalone(),canPrompt:!!window._installEvt};
+}
+function instDismissed(){const t=parseInt(localStorage.getItem(INST_KEY)||'0',10);return t&&(Date.now()-t)<INST_DAYS*864e5}
+function instShouldBanner(){if(instStandalone()||instDismissed()||st._instSkip||st.screen!=='app')return false;const i=instInfo();return i.canPrompt||i.iOS||i.inApp||i.android}
+function instDismiss(){localStorage.setItem(INST_KEY,String(Date.now()));const b=$('#instbar');if(b)b.remove()}
+function instMountBanner(){if(!instShouldBanner()){const b=$('#instbar');if(b)b.remove();return}const html=instBannerHtml();const cur=$('#instbar');if(cur){cur.outerHTML=html;return}const h=$('header.top');if(h)h.insertAdjacentHTML('afterend',html)}
+function instBannerHtml(){
+ if(!instShouldBanner())return '';
+ const i=instInfo();let title,sub,action,label;
+ if(i.canPrompt){title='Встановити на екран';sub='Швидкий доступ, як застосунок';action='instInstall(this)';label='Встановити'}
+ else if(i.iOS&&!i.iosSafari){title='Відкрийте в Safari';sub='Щоб додати на екран Додому';action="openSheet('phome')";label='Як це зробити'}
+ else if(i.iOS){title='На екран Додому';sub='Safari → Поділитися → На екран Додому';action="openSheet('phome')";label='Показати як'}
+ else if(i.inApp){title='Відкрийте в Chrome';sub='Тут встановити не вийде';action="openSheet('phome')";label='Як це зробити'}
+ else {title='Встановити на екран';sub='Працює як застосунок';action="openSheet('phome')";label='Як це зробити'}
+ return `<div class="instbar" id="instbar" role="region" aria-label="Встановити на екран"><span class="instico">${ic('phone',20)}</span><div class="grow"><div class="t14 w6 ell">${title}</div><div class="t12 sec ell">${sub}</div></div><button class="btn sm p instcta" onclick="${action}">${label}</button><button class="ib instx" onclick="instDismiss()" aria-label="Закрити">${ic('x',18)}</button></div>`;
+}
+function instMenuRow(){if(instStandalone())return null;const i=instInfo();const sub=i.canPrompt?'Працює як застосунок, без браузера':i.iOS&&!i.iosSafari?'Відкрийте посилання в Safari':i.iOS?'Поділитися → На екран Додому':i.inApp?'Відкрийте сторінку в Chrome':'Працює як застосунок';return ['phone','Встановити на екран',sub,i.canPrompt?'inst':'phome']}
+async function instInstall(btn){
+ const ev=window._installEvt;if(!ev){openSheet('phome');return}
+ try{ev.prompt();const res=await ev.userChoice;window._installEvt=null;if(res&&res.outcome==='accepted')instOnInstalled();else{st._instSkip=true;instMountBanner();if(sheetStack.some(s=>s.name==='profile'||s.name==='phome'))renderSheet()}}
+ catch(e){openSheet('phome')}
+}
+function instOnInstalled(){window._installEvt=null;st._instSkip=true;const b=$('#instbar');if(b)b.remove();toast('Застосунок встановлено');if(sheetStack.some(s=>s.name==='phome'||s.name==='profile'))closeAll()}
+function instCopyLink(){const url=location.href.split('#')[0];const done=()=>toast('Посилання скопійовано','link');if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(url).then(done).catch(()=>instCopyFallback(url,done));else instCopyFallback(url,done)}
+function instCopyFallback(url,done){const t=document.createElement('textarea');t.value=url;t.setAttribute('readonly','');t.style.position='fixed';t.style.left='-9999px';document.body.appendChild(t);t.select();try{document.execCommand('copy');done()}catch(e){toast(url,'link')}t.remove()}
+function instOpenChrome(){const u=new URL(location.href.split('#')[0]);location.href=`intent://${u.host}${u.pathname}${u.search}#Intent;scheme=https;package=com.android.chrome;S.browser_fallback_url=${encodeURIComponent(u.href)};end`}
+function instStepsIos(){return `<div class="inst-steps">
+ <div class="inst-step"><span class="inst-num">1</span><div class="grow"><div class="t16">Натисніть «Поділитися»</div><div class="t14 sec">Кнопка внизу екрана Safari, на iPad — вгорі</div></div><span class="inst-glyph" aria-hidden="true">${ic('iosshare',26)}</span></div>
+ <div class="inst-step"><span class="inst-num">2</span><div class="grow"><div class="t16">Оберіть «На екран Додому»</div><div class="t14 sec">Прокрутіть список дій, якщо не бачите одразу, потім «Додати»</div></div><span class="inst-glyph" aria-hidden="true">${ic('homeplus',26)}</span></div>
+</div>`}
+SHEETS.phome=()=>{
+ if(instStandalone())return {title:'На екрані Додому',body:`<div class="stack"><div class="card s8 center" style="padding:24px 16px">${ic('check',28)}<div class="t16" style="margin-top:8px">Уже встановлено</div><div class="t14 sec">Ви відкрили TRITON як застосунок.</div></div></div>`};
+ const i=instInfo();const logo=window.__LOGO?`<img class="logoimg" src="icons/logo-256.png" alt="" width="64" height="64" style="width:64px;height:64px">`:`<div class="logo" style="width:64px;height:64px;font-size:28px">T</div>`;
+ let body=`<div class="stack"><div class="center s8">${logo}<div class="t16">TRITON Team на екрані Додому</div></div>`;
+ if(i.canPrompt)body+=`<button class="btn p" onclick="instInstall(this)">${ic('phone',20)} Встановити на екран</button><div class="t14 sec">Після встановлення застосунок відкриватиметься без рядка браузера.</div>`;
+ else if(i.iOS&&!i.iosSafari)body+=`<div class="card s8"><div class="t16">Відкрийте посилання в Safari</div><div class="t14 sec">Chrome, Telegram та інші програми на iPhone не вміють додавати на екран Додому. Скопіюйте посилання, відкрийте Safari і вставте його в адресний рядок.</div></div>
+  <button class="btn p" onclick="instCopyLink()">${ic('copy',20)} Скопіювати посилання</button>
+  ${instStepsIos()}`;
+ else if(i.iOS)body+=`<div class="t14 sec">Safari не показує кнопку встановлення. Додайте застосунок так:</div>${instStepsIos()}`;
+ else if(i.inApp)body+=`<div class="card s8"><div class="t16">Відкрийте сторінку в Chrome</div><div class="t14 sec">У Telegram, Instagram та подібних програмах встановити застосунок не вийде. Відкрийте це посилання в Chrome — там з’явиться кнопка «Встановити на екран».</div></div>
+  <button class="btn p" onclick="instCopyLink()">${ic('copy',20)} Скопіювати посилання</button>
+  <button class="btn s" onclick="instOpenChrome()">${ic('link',20)} Відкрити в Chrome</button>`;
+ else body+=`<div class="card s8"><div class="t16">Android і комп’ютер</div><div class="t14 sec">Відкрийте сайт у Chrome. Якщо кнопка «Встановити» не з’явилась, меню ⋮ → «Додати на головний екран» або «Встановити сторінку як додаток».</div></div>
+  <div class="card s8"><div class="t16">iPhone і iPad</div><div class="t14 sec">Відкрийте в Safari, далі Поділитися → «На екран Додому».</div></div>
+  <button class="btn s" onclick="instCopyLink()">${ic('copy',20)} Скопіювати посилання</button>`;
+ body+='</div>';
+ return {title:'Встановити на екран',body};
+};
+window._onBeforeInstall=function(e){window._installEvt=e;instMountBanner();if(sheetStack.some(s=>s.name==='profile'||s.name==='phome'))renderSheet()};
+window._onAppInstalled=function(){instOnInstalled()};
+addEventListener('beforeinstallprompt',e=>{e.preventDefault();window._installEvt=e;instMountBanner()});
+addEventListener('appinstalled',()=>instOnInstalled());
+try{const mq=window.matchMedia('(display-mode: standalone)');if(mq.addEventListener)mq.addEventListener('change',ev=>{if(ev.matches)instOnInstalled()})}catch(e){}
+
 SHEETS.password=()=>({title:'Змінити пароль',body:`<div class="stack"><div class="field"><label>Новий пароль</label><input class="inp" id="np1" type="password" autocomplete="new-password" placeholder="Щонайменше 8 символів"></div><div class="field"><label>Ще раз</label><input class="inp" id="np2" type="password" autocomplete="new-password"></div></div>`,foot:`<button class="btn p" onclick="changePw(this)">Зберегти пароль</button>`});
 async function changePw(btn){const a=$('#np1').value,b=$('#np2').value;if(a.length<8)return toast('Щонайменше 8 символів','info');if(a!==b)return toast('Паролі не збігаються','info');
  await busy(btn,async()=>{const {error}=await sb.auth.updateUser({password:a});if(error)throw error;if(location.hash==='#recovery')history.replaceState(null,'',location.pathname);closeAll();toast('Пароль змінено')})}

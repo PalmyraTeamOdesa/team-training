@@ -27,7 +27,7 @@ function render(){
  if(st.screen==='boot')app.innerHTML=`<div class="boot">${logoHtml()}</div>`;
  else if(st.screen==='auth')app.innerHTML=authView();
  else if(st.screen==='onb')app.innerHTML=onbView();
- else app.innerHTML=headerView()+'<main id="main">'+(isCoach()?coachView():athleteView())+'</main>'+tabsView();
+ else app.innerHTML=headerView()+(typeof instBannerHtml==="function"?instBannerHtml():"")+'<main id="main">'+(isCoach()?coachView():athleteView())+'</main>'+tabsView();
  const m2=app.querySelector('main');if(m2&&render._k===key)m2.scrollTop=sc;render._k=key;
  renderSheet();
 }
