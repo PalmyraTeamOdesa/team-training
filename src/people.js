@@ -6,7 +6,9 @@ function isAdminId(id){return st.members.some(m=>m.id===id&&m.is_coach)||(st.coa
 function personRank(id){return isAdminId(id)?0:coachSecs(id).length?1:2}
 function sortPeople(ids){return [...ids].sort((a,b)=>personRank(a)-personRank(b)||cleanName(nameOf(a)).localeCompare(cleanName(nameOf(b)),'uk'))}
 function isPausedId(id){const m=st.members.find(x=>x.id===id);return !!(m&&m.paused)}
-function roleBadge(id){const r=personRank(id);return r===0?'<span class="rb adm">адмін</span>'+(coachSecs(id).length?'<span class="rb crd">тренер</span>':''):r===1?'<span class="rb crd">тренер</span>':'<span class="rb mem">учасник</span>'}
+function roleBadge(id){const r=personRank(id);const row=profRow(id)||{};
+ if(row.status==='pending')return '<span class="rb pz">'+(row.onboarded?'очікує':'анкета не заповнена')+'</span>';
+ return r===0?'<span class="rb adm">адмін</span>'+(coachSecs(id).length?'<span class="rb crd">тренер</span>':''):r===1?'<span class="rb crd">тренер</span>':'<span class="rb mem">учасник</span>'}
 function secPills(id,only){const c=coachSecs(id),m=memberSecs(id);return SEC_ORDER.filter(s=>(c.includes(s)||m.includes(s))&&(!only||only.includes(s))).map(s=>{const i=secInfo(s);return `<span class="spill" style="--sc:${i.color}">${ic(i.icon,12)} ${esc(i.name)}${c.includes(s)?' · тренер':''}</span>`}).join('')}
 function openDm(id){if(!id||id===st.me.id)return;openSheet('dm',id)}
 async function refreshPeople(){await Promise.all([loadMembers(),loadSections(),isAdmin()?loadCoach():null]);st.secRate={};st.clubRate=null;st.boards={};render()}
@@ -18,7 +20,7 @@ function coachesCard(sec,title){const ids=coachIdsFor(sec);if(!ids.length)return
  return `<div class="s8"><div class="over">${title||'Тренери'}</div><div class="list">${ids.map(id=>`<div class="li crow"><span class="av sm me">${esc(initials(nameOf(id)))}</span><div class="grow" style="min-width:0"><div class="row" style="gap:6px;flex-wrap:wrap"><b class="t14 w6">${esc(cleanName(nameOf(id)))}</b>${roleBadge(id)}</div><div class="pchips">${secPills(id,sec?[sec]:null)||''}</div></div><button class="ib" onclick="openDm('${id}')" aria-label="Написати">${ic('msg',20)}</button></div>`).join('')}</div></div>`}
 
 /* --- People tab (admin) --- */
-function peopleBaseIds(){return st.allProfiles.filter(r=>r.status==='active'||r.status==='blocked').map(r=>r.id)}
+function peopleBaseIds(){return st.allProfiles.filter(r=>r.status==='active'||r.status==='blocked'||r.status==='pending').map(r=>r.id)}
 function peopleIds(){const q=(st.pq||'').trim().toLowerCase(),f=st.pf;
  const ids=peopleBaseIds().filter(id=>{const r=profRow(id),out=r.status==='blocked';
   if(f==='out')return out;if(out)return false;
@@ -31,15 +33,17 @@ function personRow(id){const r=profRow(id)||{},rank=personRank(id),out=r.status=
  return `<div class="li prow ${rank<2&&!out?'crow':''} ${out?'dim':''}"><button class="pmain" onclick="openSheet('person','${id}')"><span class="av sm ${rank<2&&!out?'me':''}">${esc(initials(nameOf(id)))}</span><span class="grow" style="min-width:0"><span class="row" style="gap:6px;flex-wrap:wrap"><b class="t14 w6">${esc(nm)}${id===st.me.id?' · ви':''}</b>${roleBadge(id)}${r.paused?'<span class="rb pz">пауза</span>':''}${out?'<span class="rb out">виключено</span>':''}</span><span class="pchips">${secPills(id)||'<span class="t12 ter">без секції</span>'}</span></span></button>${id!==st.me.id?`<button class="ib" onclick="openDm('${id}')" aria-label="Написати">${ic('msg',20)}</button>`:''}</div>`}
 function peopleListHtml(){const ids=peopleIds();return ids.length?`<div class="list">${ids.map(personRow).join('')}</div>`:emptyBox('Нікого не знайдено',st.pq?'Спробуйте інше імʼя':'У цьому фільтрі порожньо')}
 function peopleView(){
- const act=st.allProfiles.filter(r=>r.status==='active'),pend=st.allProfiles.filter(r=>r.status==='pending'&&r.onboarded);
+ const act=st.allProfiles.filter(r=>r.status==='active'),pend=st.allProfiles.filter(r=>r.status==='pending');
  const coaches=act.filter(r=>isAdminId(r.id)||coachSecs(r.id).length).length;const paused=act.filter(r=>r.paused).length,out=st.allProfiles.filter(r=>r.status==='blocked').length;
  const F=[['all','Усі'],['coach','Тренери'],...SEC_ORDER.map(s=>[s,secInfo(s).name]),['pause','Пауза · '+paused]].concat(out?[['out','Виключені · '+out]]:[]);
- return `<div class="stack">${pend.length?`<button class="note" style="text-align:left;width:100%;border:0;color:inherit" onclick="go('req')">${ic('inbox',20)}<span>Нові заявки: <b style="color:var(--tx)">${pend.length}</b> · відкрити</span></button>`:''}
+ return `<div class="stack">${pend.length?`<button class="note" style="text-align:left;width:100%;border:0;color:inherit" onclick="go('req')">${ic('inbox',20)}<span>Нові заявки: <b style="color:var(--tx)">${pend.length}</b>${pend.some(r=>!r.onboarded)?' · є без анкети':''} · відкрити</span></button>`:''}
  <div class="grid3"><div class="tile"><div class="v">${act.length}</div><div class="l">людей</div></div><div class="tile"><div class="v">${coaches}</div><div class="l">тренерів</div></div><div class="tile"><div class="v ${paused?'c-warn':''}">${paused}</div><div class="l">на паузі</div></div></div>
  <input class="inp" id="pq" type="search" placeholder="Пошук за імʼям" autocomplete="off" value="${esc(st.pq)}" oninput="peopleSearch(this.value)">
  ${chipRow(F,st.pf,'peopleFilter',true)}
  <div id="plist">${peopleListHtml()}</div>
- <div class="list">${li({left:`<span class="ico a">${ic('plus',20)}</span>`,t:'Додати людину',s:'Новий акаунт із ролями й секціями',on:'openNewPerson()'})}${li({left:`<span class="ico">${ic('chart',20)}</span>`,t:'Огляд команди і звіт',s:'Статус, виконання плану, тижневий звіт',on:"openSheet('teamOverview')"})}</div></div>`}
+ <button class="btn p" onclick="openInvite()">${ic('link',20)} Запросити за посиланням</button>
+ <button class="btn s" onclick="openNewPerson()">${ic('plus',18)} Нова людина</button>
+ <div class="list">${li({left:`<span class="ico">${ic('chart',20)}</span>`,t:'Огляд команди і звіт',s:'Статус, виконання плану, тижневий звіт',on:"openSheet('teamOverview')"})}</div></div>`}
 function peopleSearch(v){st.pq=v;const el=$('#plist');if(el)el.innerHTML=peopleListHtml()}
 function peopleFilter(v){st.pf=v;render()}
 SHEETS.teamOverview=()=>({title:'Огляд команди',full:true,body:cTeamView()});
@@ -50,6 +54,7 @@ SHEETS.person=id=>{const r=profRow(id);if(!r)return {title:'',body:''};const sel
  let b=`<div class="stack"><div class="row12"><span class="av lg ${personRank(id)<2?'me':''}">${esc(initials(nameOf(id)))}</span><div class="grow" style="min-width:0"><div class="t20">${esc(cleanName(nameOf(id)))}${self?' · ви':''}</div><div class="row" style="gap:6px;flex-wrap:wrap;margin-top:4px">${roleBadge(id)}${r.paused?'<span class="rb pz">пауза</span>':''}${out?'<span class="rb out">виключено</span>':''}</div><div class="t12 sec" style="margin-top:4px">${r.age?r.age+' р. · ':''}${esc(r.group_name||'')}${a&&!self?' · '+lastSeen(a):''}</div></div></div>
  <div class="pchips">${secPills(id)||'<span class="t12 ter">Без секцій</span>'}</div>`;
  if(r.paused)b+=`<div class="note warn">${ic('clock',20)}<span>На паузі${r.paused_note?': '+esc(r.paused_note):''}. Прихований з дощок і рейтингів.</span></div><button class="btn s" onclick="personPause(this,'${id}',false)">${ic('refresh',20)} Зняти паузу</button>`;
+ if(r.status==='pending'){b+=`<div class="note">${ic('clock',20)}<span>${r.onboarded?'Анкету заповнено, очікує підтвердження.':'Анкету ще не заповнено. Можна підтвердити зараз або зачекати, поки людина закінчить реєстрацію.'}</span></div>`;return {title:'Людина',full:true,body:b+'</div>',foot:`<button class="btn s" onclick="openSheet('athlete','${id}')">Відкрити заявку</button><button class="btn p" onclick="approve(this,'${id}')">Прийняти в команду</button>`}}
  if(out)return {title:'Людина',full:true,body:b+`<div class="note warn">${ic('alert',20)}<span>Виключено з команди. Вхід закрито, секційні ролі прибрано. Історія тренувань, відміток, балів і нагород збережена.</span></div><button class="btn p" onclick="personRestore(this,'${id}')">${ic('unlock',20)} Повернути в команду</button></div>`};
  b+=`<div class="row" style="gap:8px">${self?`<button class="btn s sm grow" onclick="closeAll();toSelf(null)">${ic('bike',18)} Мій кабінет</button>`:`<button class="btn p sm grow" onclick="openDm('${id}')">${ic('msg',18)} Написати</button><button class="btn s sm grow" onclick="openSheet('athlete','${id}')">${ic('chart',18)} Навантаження</button>`}</div>
  <div class="list">${li({left:`<span class="ico a">${ic('users',20)}</span>`,t:'Зробити тренером · секції',s:(cs.length?'Тренер: '+cs.map(s=>secInfo(s).name).join(', '):'Не тренер')+' · спортсмен: '+(ms.map(s=>secInfo(s).name).join(', ')||'ніде'),on:`openRoles('${id}')`})}
@@ -63,8 +68,8 @@ SHEETS.person=id=>{const r=profRow(id);if(!r)return {title:'',body:''};const sel
 /* --- roles & sections (one save) --- */
 function openRoles(id){st._pr={id,coach:new Set(coachSecs(id)),member:new Set(memberSecs(id))};openSheet('personRoles',id)}
 function prGrid(){const pr=st._pr;
- return `<div class="list">${SEC_ORDER.map(s=>{const i=secInfo(s);return `<div class="li" style="gap:8px">${secDot(s)}<div class="grow t14 w6">${esc(i.name)}</div><button class="chip ${pr.coach.has(s)?'on':''}" onclick="prTog('coach','${s}')">Тренер</button><button class="chip ${pr.member.has(s)?'on':''}" onclick="prTog('member','${s}')">Спортсмен</button></div>`}).join('')}</div>
- <div class="row" style="gap:8px"><button class="btn s sm grow" onclick="prAll('coach')">${SEC_ORDER.every(s=>st._pr.coach.has(s))?'Прибрати тренера скрізь':'Тренер в усіх'}</button><button class="btn s sm grow" onclick="prAll('member')">${SEC_ORDER.every(s=>st._pr.member.has(s))?'Прибрати зі всіх':'Спортсмен в усіх'}</button></div>`}
+ return `<div class="list">${SEC_ORDER.map(s=>{const i=secInfo(s);return `<div class="li prrow">${secDot(s)}<div class="grow t14 w6">${esc(i.name)}</div><div class="practs"><button class="chip ${pr.coach.has(s)?'on':''}" onclick="prTog('coach','${s}')">Тренер</button><button class="chip ${pr.member.has(s)?'on':''}" onclick="prTog('member','${s}')">Спортсмен</button></div></div>`}).join('')}</div>
+ <div class="row" style="gap:8px;flex-wrap:wrap"><button class="btn s sm grow" onclick="prAll('coach')">${SEC_ORDER.every(s=>st._pr.coach.has(s))?'Прибрати тренера скрізь':'Тренер в усіх'}</button><button class="btn s sm grow" onclick="prAll('member')">${SEC_ORDER.every(s=>st._pr.member.has(s))?'Прибрати зі всіх':'Спортсмен в усіх'}</button></div>`}
 function prSync(){const a=$('#npn'),b=$('#npe');if(a)st._pr.name=a.value;if(b)st._pr.email=b.value}
 function prTog(k,s){prSync();const set=st._pr[k];set.has(s)?set.delete(s):set.add(s);renderSheet()}
 function prAll(k){prSync();const set=st._pr[k],all=SEC_ORDER.every(s=>set.has(s));SEC_ORDER.forEach(s=>all?set.delete(s):set.add(s));renderSheet()}
@@ -76,6 +81,24 @@ SHEETS.personRoles=id=>{const pr=st._pr;if(!pr||pr.id!==id)return {title:'',body
 async function prSave(btn){const pr=st._pr;await busy(btn,async()=>{D(await sb.rpc('admin_set_roles',{uid:pr.id,coach_sections:[...pr.coach],member_sections:[...pr.member]}));await refreshPeople();closeSheet();toast('Ролі збережено')})}
 
 /* --- new person (account with roles) --- */
+
+/* --- invite by link (the original share-the-app-URL flow, restored in Люди) --- */
+function openInvite(){st._inv=st._inv||{coach:new Set(),member:new Set()};st._pr=st._inv;openSheet('invite')}
+function inviteBase(){return (location.origin+location.pathname).replace(/index\.html$/,'')}
+function inviteUrl(){const inv=st._inv||st._pr||{member:new Set(),coach:new Set()};const m=[...inv.member],c=[...inv.coach];let h='#i';if(m.length||c.length){h='#i='+m.join(',');if(c.length)h+='&c='+c.join(',')}return inviteBase()+h}
+function inviteText(){return 'Запрошую до команди TRITON (Одеса). Зареєструйтесь за посиланням — тренер підтвердить участь.'}
+SHEETS.invite=()=>{st._pr=st._inv||(st._inv={coach:new Set(),member:new Set()});const url=inviteUrl();const canShare=typeof navigator.share==='function';
+ return {title:'Запросити за посиланням',body:`<div class="stack"><div class="t14 sec">Надішліть посилання в Telegram. Людина реєструється, заповнює анкету і зʼявляється у «Нові заявки». Підтвердження — лише вами, не автоматично.</div>
+  <div class="invurl" id="invurl">${esc(url)}</div>
+  <div class="row" style="gap:8px;flex-wrap:wrap"><button class="btn p grow" onclick="inviteCopy()">${ic('copy',18)} Копіювати</button><button class="btn s grow" onclick="inviteTelegram()">${ic('msg',18)} Надіслати в Telegram</button></div>
+  ${canShare?`<button class="btn s" onclick="inviteShare()">${ic('link',18)} Поділитися</button>`:''}
+  <div class="over">Секції після підтвердження (необовʼязково)</div>
+  <div class="t12 ter">За замовчуванням — спортсмен. Якщо нічого не обрати, секції призначите під час підтвердження заявки.</div>
+  ${prGrid()}</div>`}}
+function inviteCopy(){const url=inviteUrl(),done=()=>toast('Посилання скопійовано','link');if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(url).then(done).catch(()=>instCopyFallback(url,done));else instCopyFallback(url,done)}
+function inviteTelegram(){const url=inviteUrl();location.href='https://t.me/share/url?url='+encodeURIComponent(url)+'&text='+encodeURIComponent(inviteText())}
+async function inviteShare(){const url=inviteUrl();try{if(navigator.share)await navigator.share({title:'TRITON Team',text:inviteText(),url})}catch(e){if(e&&e.name!=='AbortError')inviteCopy()}}
+
 function openNewPerson(){st._pr={id:null,coach:new Set(),member:new Set(),name:'',email:''};openSheet('newPerson')}
 SHEETS.newPerson=()=>{const pr=st._pr;return {title:'Нова людина',body:`<div class="stack"><div class="t14 sec">Акаунт одразу підтверджений. Тимчасовий пароль покажемо один раз.</div><input class="inp" id="npn" maxlength="80" placeholder="Імʼя та прізвище" value="${esc(pr.name||'')}"><input class="inp" id="npe" type="email" maxlength="120" placeholder="Email" value="${esc(pr.email||'')}">${prGrid()}<div id="npres"></div></div>`,foot:`<button class="btn p" onclick="newPersonSave(this)">Створити</button>`}};
 async function newPersonSave(btn){prSync();const pr=st._pr;const full_name=(pr.name||'').trim(),email=(pr.email||'').trim();if(!full_name||!email)return toast('Вкажіть імʼя та email','info');

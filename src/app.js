@@ -48,7 +48,7 @@ function tabsView(){
  const a=isCoach()?[['team','users','Люди'],['sec','target','Секції'],['req','inbox','Запити'],['events','flag','Події'],['chat','msg','Чати']]
   :[['today','today','Сьогодні'],['plan','cal','План'],['sec','target','Секції'],['food','food','Харчування'],['prog','chart','Прогрес']];
  const cur=isCoach()?st.ctab:st.tab;
- const pend=st.requests.filter(r=>r.status==='pending').length+(isCoach()?st.athletes.filter(a=>a.status==='pending'&&a.onboarded).length:0);
+ const pend=st.requests.filter(r=>r.status==='pending').length+(isCoach()?st.athletes.filter(a=>a.status==='pending').length:0);
  return `<nav class="tabs">${a.map(x=>`<button class="${cur===x[0]?'on':''}" onclick="go('${x[0]}')">${ic(x[1],24)}<span>${x[2]}</span>${isCoach()&&x[0]==='req'&&pend?`<b class="cnt">${pend}</b>`:''}</button>`).join('')}</nav>`}
 function athleteView(){return ({today:todayView,plan:planView,team:secView,sec:secView,food:foodView,prog:progView})[st.tab]()}
 function coachView(){return ({team:peopleView,sec:secView,req:cReqView,lib:cLibView,events:cEventsView,chat:cChatView})[st.ctab]()}

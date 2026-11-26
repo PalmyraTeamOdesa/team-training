@@ -43,8 +43,12 @@ function cTeamView(){
  return h+'</div>'}
 function ctAge(v){st.ctAge=v;render()}
 function ctFilter(v){st.ctFilter=v;render()}
-async function shareInvite(){const url=location.origin+location.pathname;const t='TRITON Team — тренування команди. Зареєструйтесь тут: '+url;try{if(navigator.share)await navigator.share({text:t});else{await navigator.clipboard.writeText(url);toast('Посилання скопійовано')}}catch(e){}}
-async function approve(btn,id){await busy(btn,async()=>{D(await sb.from('profiles').update({status:'active'}).eq('id',id));const a=st.athletes.find(x=>x.id===id);a.status='active';a.p.status='active';await loadMembers();render();renderSheet();toast(a.name+' в команді')})}
+function shareInvite(){if(typeof openInvite==='function')openInvite();else{const url=location.origin+location.pathname;navigator.clipboard&&navigator.clipboard.writeText(url).then(()=>toast('Посилання скопійовано'))}}
+async function approve(btn,id){await busy(btn,async()=>{const pr=st._pr&&st._pr.id===id?st._pr:null;
+ if(pr&&(pr.member.size||pr.coach.size)){const {error}=await sb.from('profiles').update({invite_member:[...pr.member],invite_coach:[...pr.coach]}).eq('id',id);if(error)console.warn(error)}
+ D(await sb.from('profiles').update({status:'active'}).eq('id',id));const a=st.athletes.find(x=>x.id===id);if(a){a.status='active';a.p.status='active'}
+ if(typeof refreshPeople==='function')await refreshPeople();else{await loadMembers();await loadSections()}
+ closeAll();toast((a?a.name:'Людину')+' прийнято в команду')})}
 async function setAthlete(btn,id,fields,msg){await busy(btn,async()=>{const r=D(await sb.from('profiles').update(fields).eq('id',id).select().single());const a=st.athletes.find(x=>x.id===id);const p=toP(r);Object.assign(a,{name:p.name,group:p.group,status:r.status,p});await loadMembers();render();renderSheet();toast(msg||'Збережено')})}
 
 /* athlete card */
@@ -72,6 +76,7 @@ SHEETS.athlete=id=>{const a=st.athletes.find(x=>x.id===id);if(!a)return {title:'
   <div class="field"><label>Група</label>${seg([['Шосе','Шосе'],['Тріатлон','Тріатлон'],['Новачки','Новачки'],['Діти','Діти']],a.group,`(v=>setAthlete(null,'${id}',{group_name:v},'Групу змінено'))`)}</div>
   <div class="list">${li({left:`<span class="ico a">${ic('trophy',20)}</span>`,t:'Нагородити досягненням',s:(st.allAwards||[]).filter(x=>x.athlete_id===id).length+' нагород від вас',on:`openSheet('award','${id}')`})}${li({left:`<span class="ico">${ic('msg',20)}</span>`,t:'Написати',s:'Особисте повідомлення',on:`openSheet('dm','${id}')`})}${li({left:`<span class="ico">${ic('lock',20)}</span>`,t:'Скинути пароль',s:'Створити тимчасовий пароль для входу',on:`resetPw(this,'${id}')`})}
   ${a.status==='blocked'?li({left:`<span class="ico">${ic('unlock',20)}</span>`,t:'Розблокувати',on:`setAthlete(this,'${id}',{status:'active'},'Розблоковано')`}):li({left:`<span class="ico">${ic('x',20)}</span>`,t:a.status==='pending'?'Відхилити заявку':'Заблокувати доступ до команди',s:'Спортсмен не бачитиме стрічку і чат',on:`if(confirm('Підтвердити?'))setAthlete(this,'${id}',{status:'blocked'},'Доступ закрито')`})}</div>`}
+ if(a.status==='pending'){if(!st._pr||st._pr.id!==id)st._pr={id,coach:new Set(p.inviteCoach||[]),member:new Set(p.inviteMember||[])};b+=`<div class="over">Секції після підтвердження</div>${prGrid()}<div class="t12 ter">За замовчуванням — спортсмен. Підтвердження лише вами, не автоматично.</div>`}
  return {title:esc(a.name),full:true,body:b+'</div>',foot:a.status==='pending'?`<button class="btn p" onclick="approve(this,'${id}')">Прийняти в команду</button>`:''}};
 function cardSeg(v){st.cardSeg=v;renderSheet()}
 async function cwk(v){st._cwk=+v;renderSheet()}
@@ -106,8 +111,8 @@ function cReqView(){const pend=st.requests.filter(r=>r.status==='pending');const
   <div class="t16">${esc(r.kind)}</div>${r.body?`<div class="t14 sec">${esc(r.body)}</div>`:''}
   ${old?`<div class="note">${ic('spark',20)}<span>Спортсмену вже запропоновано безпечний варіант AI: обсяг 60%, лише зона 2.</span></div>`:''}
   <div class="row"><button class="btn s sm grow" onclick="decide(this,${r.id},'rejected')">Відхилити</button><button class="btn s sm grow" onclick="editForReq(${r.id})">Змінити план</button><button class="btn p sm grow" onclick="decide(this,${r.id},'approved')">Дозволити</button></div></div>`}).join(''):emptyBox('Нових запитів немає','Коли спортсмен попросить змінити план, запит зʼявиться тут');
- const apps=st.athletes.filter(a=>a.status==='pending'&&a.onboarded);
- if(apps.length)h+=`<div class="over">Заявки в команду · ${apps.length}</div><div class="list">${apps.map(a=>li({left:`<span class="av sm">${esc(a.ini)}</span>`,t:esc(a.name),s:'Анкету заповнено',on:`openSheet('athlete','${a.id}')`})).join('')}</div>`;
+ const apps=st.athletes.filter(a=>a.status==='pending');
+ if(apps.length)h+=`<div class="over">Заявки в команду · ${apps.length}</div><div class="list">${apps.map(a=>{const im=(a.p&&a.p.inviteMember)||[],ic_=(a.p&&a.p.inviteCoach)||[];const sub=!a.onboarded?'анкета не заповнена':(im.length||ic_.length?SEC_ORDER.filter(s=>im.includes(s)||ic_.includes(s)).map(s=>secInfo(s).name+(ic_.includes(s)?' · тренер':'')).join(', '):'Анкету заповнено');return `<button class="li" onclick="openSheet('athlete','${a.id}')"><span class="av sm">${esc(a.ini)}</span><div class="grow"><div class="row" style="gap:6px;flex-wrap:wrap"><span class="t16 ell">${esc(a.name)}</span>${a.onboarded?'':'<span class="rb pz">анкета не заповнена</span>'}</div><div class="t12 sec ell">${esc(sub)}</div></div><span class="chev">${ic('chev',20)}</span></button>`}).join('')}</div>`;
  if(done.length)h+=`<div class="over">Історія</div><div class="list">${done.map(r=>`<div class="li"><div class="grow"><div class="t14 w6 ell">${esc(nameOf(r.athlete_id))}: ${esc(r.kind)}</div><div class="t12 sec ell">${esc(r.body||'')}</div></div>${tag(REQ_ST[r.status][0],REQ_ST[r.status][1])}</div>`).join('')}</div>`;
  return h+'</div>'}
 async function decide(btn,id,status){await busy(btn,async()=>{const r=D(await sb.from('change_requests').update({status}).eq('id',id).select().single());Object.assign(st.requests.find(x=>x.id===id),r);
