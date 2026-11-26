@@ -17,6 +17,8 @@ async function loadAll(){
  st.coach=!!D(await sb.from('coaches').select('user_id').eq('user_id',uid).maybeSingle());
  if(!prof){st.me=toP({id:uid,full_name:(st.user.user_metadata||{}).full_name||'',status:'pending',onboarded:false});return}
  st.me=toP(prof);
+ await loadSections().catch(e=>console.warn(e));
+ if(!st.coach&&coachSecs().length&&!memberSecs().length&&st.tab==='today')st.tab='sec';
  const tasks=[loadNotifs(),loadMembers()];
  if(st.coach)tasks.push(loadCoach(),loadTeam());
  else if(st.me.onboarded)tasks.push(loadMine(),loadTeam());
@@ -61,7 +63,7 @@ const PHOTO_URL={};
 function weekN(p,wk){const c=p.created?new Date(p.created):new Date();const c0=new Date(c.getFullYear(),c.getMonth(),c.getDate()-((c.getDay()+6)%7));return Math.max(0,Math.round((dayDate(wk,0)-c0)/864e5/7))}
 function genFor(p,wk,scale){
  let s=scale||1,note=null;const race=raceSoon(p,wk);if(race){s*=.65;note='Підводка до старту «'+race.name+'»: обсяг знижено на 35%, інтенсивність збережено.'}
- const d=genWeek(p,weekN(p,wk),s);return {days:d,scale:s,note}}
+ const d=genWeek(pEff(p),weekN(p,wk),s);return {days:d,scale:s,note}}
 function planRowToDays(r){return r.days.map((d,i)=>Object.assign({i,items:[],tod:'any',rest:true},d,{i,rest:!(d.items&&d.items.length)}))}
 function plannedCount(days){return days.filter(d=>d.items.some(it=>!it.log||true)&&d.items.length).length}
 function plannedMin(days){return days.reduce((a,d)=>a+dayMin(d),0)}
@@ -80,6 +82,7 @@ function weekPlan(pid,wk){
  if(r){days=planRowToDays(r);note=r.note?{k:'race',t:r.note}:null;locked=r.coach_locked;if(r.scale&&r.scale<1&&!r.note)note={k:'scale',t:'План полегшено: обсяг '+Math.round(r.scale*100)+'%.'}}
  else if(p&&p.onboarded){const g=genFor(p,wk,1);days=g.days;note=g.note?{k:'race',t:g.note}:null}
  else days=Array.from({length:7},(_,i)=>({i,items:[],tod:'any',rest:true}));
+ const cs=coachedSports(pid);if(cs.length)days=days.map(d=>{if(d.rest||!d.items.some(it=>cs.includes(it.sport)&&!it.log&&!it.coach))return d;return Object.assign({},d,{items:d.items.map(it=>cs.includes(it.sport)&&!it.log&&!it.coach?{sport:it.sport,log:true,section:true,min:it.min}:it)})});
  const wl=pid===st.me.id?st.well[dayIso(0,TODAY)]:null;
  if(wk===0&&wl&&wellBad(wl)>=2){const t=days[TODAY];if(t&&!t.rest&&!t.items.some(x=>x.coach)){const w=LIB.find(x=>x.sport==='bike'&&x.cat==='rec')||LIB[0];days[TODAY]=Object.assign({},t,{items:[{sport:t.items[0].sport==='bike'?'bike':t.items[0].sport,w:t.items[0].sport==='bike'?w.id:null,min:Math.min(40,t.items[0].min),easy:true}],adapted:true})}note={k:'well',t:'План на сьогодні полегшено через погане самопочуття. Тренер отримав сповіщення.'}}
  return {days,note,stored,locked};

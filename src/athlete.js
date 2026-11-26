@@ -12,11 +12,11 @@ function segText(s,w,ftp){
 function zoneName(p,sp){if(sp==='gym')return p<.5?'Розтяжка':'Робочі підходи';return p<.56?'Відновлення':p<.76?'Витривалість':p<.9?'Темп':p<1.05?'Поріг':p<1.2?'VO2max':'Анаеробна'}
 function intTxt(p,sp){if(sp==='gym')return p>.7?'RPE 8':'RPE 6';return zoneName(p,sp).toLowerCase()}
 function itemW(it){return it&&it.w?libById(it.w):null}
-function itemName(it){const w=itemW(it);return w?w.name:(it.log?SPORT[it.sport].n+' · свій тренер':it.title||SPORT[it.sport].n)}
+function itemName(it){const w=itemW(it);return w?w.name:(it.section?SPORT[it.sport].n+' · план тренера секції':it.log?SPORT[it.sport].n+' · свій тренер':it.title||SPORT[it.sport].n)}
 
 function workoutCard(d,pid,wk,big){
  const it=d.items[0];const w=itemW(it);
- if(!w)return `<div class="card"><div class="row12">${sportIco(it.sport)}<div class="grow"><div class="t16">${esc(itemName(it))}</div><div class="t12 sec">${fmtMin(it.min)}${it.log?' · ми лише фіксуємо тренування':''}</div></div></div></div>`;
+ if(!w)return `<div class="card"><div class="row12">${sportIco(it.sport)}<div class="grow"><div class="t16">${esc(itemName(it))}</div><div class="t12 sec">${fmtMin(it.min)}${it.section?' · завдання на дошці секції':it.log?' · ми лише фіксуємо тренування':''}</div></div></div></div>`;
  return `<div class="card ${big?'hl':''} tapc" onclick="openSheet('wk',{pid:'${pid}',wk:${wk},i:${d.i},j:0})">
   <div class="between"><span class="tag a">${ic(SPORT[w.sport].i,14)} ${SPORT[w.sport].n} · ${catName(w.sport,w.cat)}</span><span class="t12 ter">${TOD[d.tod]||''}</span></div>
   <div class="t20" style="margin-top:12px">${esc(w.name)}</div>
@@ -30,7 +30,7 @@ const WQ=[['Як ви спали?',['Погано','Нормально','Доб�
 function pendingBanner(){return st.me.status==='pending'?`<div class="note">${ic('clock',20)}<span>Тренер ще не підтвердив вашу участь. План і щоденник уже працюють, стрічка і чат команди відкриються після підтвердження.</span></div>`:''}
 function todayView(){
  const pid=st.me.id,p=me();const {days,note}=weekPlan(pid,0);const d=days[TODAY];const tIso=dayIso(0,TODAY);
- let h=`<div class="stack"><div><div class="over">${DAYS_FULL[TODAY]}, ${fmtDate(dayDate(0,TODAY))}</div><div class="t28" style="margin-top:4px">Привіт, ${esc(p.short)}</div></div>${pendingBanner()}`;
+ let h=`<div class="stack"><div><div class="over">${DAYS_FULL[TODAY]}, ${fmtDate(dayDate(0,TODAY))}</div><div class="t28" style="margin-top:4px">Привіт, ${esc(p.short)}</div></div>${pendingBanner()}${todayBoardCards()}`;
  const wl=st.well[tIso];
  if(!wl){const q=WQ[st.wellStep];h+=`<div class="card"><div class="between"><div class="over">Самопочуття · ${st.wellStep+1}/3</div></div><div class="q" style="margin-top:8px">${q[0]}</div>
   <div class="wl">${q[1].map((o,k)=>`<button onclick="wellAns(${k})">${o}</button>`).join('')}</div></div>`}

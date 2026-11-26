@@ -200,3 +200,22 @@ img.post-photo{width:100%;height:auto;max-height:420px;object-fit:cover;display:
 .ib[disabled]{opacity:.35}
 header.top{padding-top:max(8px,env(safe-area-inset-top))}
 nav.tabs{padding-bottom:env(safe-area-inset-bottom)}
+
+/* ---------- sections ---------- */
+.secchip{border-color:color-mix(in srgb,var(--sc) 45%,transparent);color:var(--tx2);gap:6px}
+.secchip svg{color:var(--sc)}
+.secchip.on{background:color-mix(in srgb,var(--sc) 20%,transparent);border-color:var(--sc);color:var(--tx)}
+.secdot{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;background:color-mix(in srgb,var(--sc) 20%,transparent);color:var(--sc)}
+.sechero{display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:16px;background:linear-gradient(135deg,color-mix(in srgb,var(--sc) 22%,var(--s1)),var(--s1));border:1px solid color-mix(in srgb,var(--sc) 35%,transparent)}
+.secico{display:inline-flex;align-items:center;justify-content:center;width:40px;height:40px;border-radius:12px;background:color-mix(in srgb,var(--sc) 25%,transparent);color:var(--sc);flex:none}
+.myline{padding:14px 16px;border-radius:16px;background:color-mix(in srgb,var(--sc) 16%,var(--s1));border:1px solid color-mix(in srgb,var(--sc) 55%,transparent)}
+.myline .over svg{vertical-align:-2px}
+.bplan{border-left:3px solid var(--sc)}
+.t18{font-size:18px;line-height:24px}
+.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+.sw{position:relative;display:inline-block;width:46px;height:28px;flex:none}
+.sw input{opacity:0;width:0;height:0;position:absolute}
+.sw span{position:absolute;inset:0;border-radius:14px;background:var(--s2);border:1px solid var(--bd2);transition:.2s}
+.sw span::after{content:"";position:absolute;left:3px;top:3px;width:20px;height:20px;border-radius:50%;background:var(--tx2);transition:.2s}
+.sw input:checked+span{background:var(--acc-soft);border-color:var(--acc)}
+.sw input:checked+span::after{transform:translateX(18px);background:var(--acc)}

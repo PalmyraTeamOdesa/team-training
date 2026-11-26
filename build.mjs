@@ -9,7 +9,7 @@ fs.mkdirSync(out, { recursive: true });
 
 await build({ entryPoints: ['src/vendor.js'], bundle: true, format: 'iife', globalName: 'supabase', minify: true, outfile: `${out}/vendor.js`, target: 'es2020' });
 
-const order = ['config.js', 'core.js', 'fooddb.js', 'num.js', 'plan.js', 'app.js', 'data.js', 'auth.js', 'athlete.js', 'files.js', 'team.js', 'food.js', 'prog.js', 'coach.js', 'onb.js', 'misc.js'];
+const order = ['config.js', 'core.js', 'fooddb.js', 'num.js', 'plan.js', 'app.js', 'data.js', 'auth.js', 'athlete.js', 'files.js', 'team.js', 'food.js', 'prog.js', 'coach.js', 'sections.js', 'onb.js', 'misc.js'];
 const js = order.map((f) => `/* ===== ${f} ===== */\n` + fs.readFileSync(path.join('src', f), 'utf8')).join('\n');
 fs.writeFileSync(`${out}/app.js`, js);
 fs.copyFileSync('src/style.css', `${out}/style.css`);

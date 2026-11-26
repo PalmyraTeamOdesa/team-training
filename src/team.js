@@ -37,9 +37,10 @@ function rateList(){
  if(st.rateBy!=='all')arr=arr.filter(a=>['bike','run','swim','gym'].includes(st.rateBy)?a.sports.includes(st.rateBy):a.group===st.rateBy);
  arr.sort((x,y)=>y.score-x.score);return arr}
 function rateBody(){
- if(!st.rating){loadRating();return `<div class="empty">Завантаження…</div>`}
+ const rm=seg([['week','Тиждень'],['month','Клуб · місяць']],st.rateMode,'rateMode');if(st.rateMode==='month')return rm+clubRateBody();
+ if(!st.rating){loadRating();return rm+`<div class="empty">Завантаження…</div>`}
  const arr=rateList();const myId=st.me.id;
- let h=seg([['adult','Дорослі'],['kid','Діти']],st.rateAge,'rateAge')+chipRow([['all','Уся команда'],['bike','Вело'],['run','Біг'],['swim','Плавання'],['Шосе','Шосе'],['Тріатлон','Тріатлон'],['Новачки','Новачки']],st.rateBy,'rateBy',true);
+ let h=rm+seg([['adult','Дорослі'],['kid','Діти']],st.rateAge,'rateAge')+chipRow([['all','Уся команда'],['bike','Вело'],['run','Біг'],['swim','Плавання'],['Шосе','Шосе'],['Тріатлон','Тріатлон'],['Новачки','Новачки']],st.rateBy,'rateBy',true);
  h+=`<div class="t12 ter">Тиждень ${weekRange(0)} · рахуємо виконання плану (70%) і регулярність (30%), а не кілометри</div>`;
  if(!arr.length)return h+emptyBox('Нікого в цьому фільтрі');
  h+=`<div class="list">${arr.map((a,k)=>`<div class="li" style="${a.id===myId?'background:var(--acc-soft)':''}"><div class="t16 num ${k<3?'acc':'ter'}" style="width:20px;text-align:center">${k+1}</div><span class="av sm ${a.id===myId?'me':''}">${esc(initials(a.name))}</span><div class="grow"><div class="t14 w6 ell">${esc(a.name)}${a.id===myId?' · ви':''}</div><div class="t12 sec">План ${a.compl}% · регулярність ${a.cons}%</div></div><div class="t16 num">${a.score}</div></div>`).join('')}</div>`;

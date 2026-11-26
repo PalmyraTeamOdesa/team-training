@@ -33,22 +33,22 @@ function render(){
 }
 function go(tab){if(isCoach())st.ctab=tab;else st.tab=tab;const m=$('main');if(m)m.scrollTop=0;render._k='';render();onTab(tab)}
 function headerView(){
- const p=me();const titles={today:'Сьогодні',plan:'План',team:'Команда',food:'Харчування',prog:'Прогрес'};
- const ctitles={team:'Команда',req:'Запити',lib:'Бібліотека',events:'Події',chat:'Чати'};
+ const p=me();const titles={today:'Сьогодні',plan:'План',team:'Команда',sec:'Секції',food:'Харчування',prog:'Прогрес'};
+ const ctitles={team:'Команда',sec:'Секції',req:'Запити',lib:'Бібліотека',events:'Події',chat:'Чати'};
  const t=isCoach()?ctitles[st.ctab]:titles[st.tab];
  const unread=st.notifs.some(n=>!n.read);
  return `<header class="top"><button class="av btn-av" onclick="openSheet('profile')" aria-label="Профіль"><span class="av ${isCoach()?'me':''}">${esc(p.ini)}</span></button>
- <div class="ttl"><h1>${t}</h1>${isCoach()?'<span class="demo">тренер</span>':p.status==='pending'?'<span class="demo">очікує підтвердження</span>':''}</div>
+ <div class="ttl"><h1>${t}</h1>${isCoach()?'<span class="demo">адмін</span>':coachSecs().length?'<span class="demo">тренер секції</span>':p.status==='pending'?'<span class="demo">очікує підтвердження</span>':''}</div>
  <button class="ib" onclick="openSheet('ai')" aria-label="Асистент">${ic('spark',22)}</button>
  <button class="ib" onclick="openSheet('notifs')" aria-label="Сповіщення">${ic('bell',22)}${unread?'<i class="dot"></i>':''}</button></header>`}
 function tabsView(){
- const a=isCoach()?[['team','users','Команда'],['req','inbox','Запити'],['lib','book','Бібліотека'],['events','flag','Події'],['chat','msg','Чати']]
-  :[['today','today','Сьогодні'],['plan','cal','План'],['team','users','Команда'],['food','food','Харчування'],['prog','chart','Прогрес']];
+ const a=isCoach()?[['team','users','Команда'],['sec','target','Секції'],['req','inbox','Запити'],['events','flag','Події'],['chat','msg','Чати']]
+  :[['today','today','Сьогодні'],['plan','cal','План'],['sec','target','Секції'],['food','food','Харчування'],['prog','chart','Прогрес']];
  const cur=isCoach()?st.ctab:st.tab;
  const pend=st.requests.filter(r=>r.status==='pending').length+(isCoach()?st.athletes.filter(a=>a.status==='pending'&&a.onboarded).length:0);
  return `<nav class="tabs">${a.map(x=>`<button class="${cur===x[0]?'on':''}" onclick="go('${x[0]}')">${ic(x[1],24)}<span>${x[2]}</span>${isCoach()&&x[0]==='req'&&pend?`<b class="cnt">${pend}</b>`:''}</button>`).join('')}</nav>`}
-function athleteView(){return ({today:todayView,plan:planView,team:teamView,food:foodView,prog:progView})[st.tab]()}
-function coachView(){return ({team:cTeamView,req:cReqView,lib:cLibView,events:cEventsView,chat:cChatView})[st.ctab]()}
+function athleteView(){return ({today:todayView,plan:planView,team:secView,sec:secView,food:foodView,prog:progView})[st.tab]()}
+function coachView(){return ({team:cTeamView,sec:secView,req:cReqView,lib:cLibView,events:cEventsView,chat:cChatView})[st.ctab]()}
 
 /* ---------- SHEETS ---------- */
 const SHEETS={};
