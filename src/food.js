@@ -26,21 +26,43 @@ function foodToday(){
   ${nf({id:'c-coffee',label:'Кава',val:st.cnt.coffee,min:0,max:12,step:1,unit:'чашки',plus:true,set:v=>st.cnt.coffee=v,release:()=>saveCnt()})}
   ${nf({id:'c-alc',label:'Алкоголь',val:st.cnt.alc,min:0,max:12,step:1,unit:'порції',plus:true,set:v=>st.cnt.alc=v,release:()=>saveCnt()})}</div>`;
  if(st.cnt.water<8)h+=`<div class="note">${ic('drop',20)}<span>До кінця дня ще ${Math.max(0,10-st.cnt.water)} склянок води.${n.prot-e.p>10?' Білка бракує '+Math.round(n.prot-e.p)+' г.':''}</span></div>`;
- h+=`<div class="s8"><div class="over">Журнал</div>${list.length?`<div class="list">${list.map(f=>`<div class="li"><button class="grow" style="background:none;border:0;text-align:left;color:inherit;min-height:44px" onclick="openSheet('foodEdit',${f.id})"><div class="t14 w6">${esc(f.name)} <span class="sec" style="font-weight:400">${fmtNum(f.amount)} ${esc(f.unit)}</span></div><div class="t12 ter">Б ${Math.round(f.p)} · Ж ${Math.round(f.f)} · В ${Math.round(f.c)}${+f.alc?' · алкоголь '+(+f.alc).toFixed(1).replace('.',',')+' г':''}</div></button><div class="t14 num">${f.kcal}</div><button class="ib" onclick="delFood(${f.id})" aria-label="Видалити">${ic('x',18)}</button></div>`).join('')}</div>`:`<div class="t14 ter">Поки порожньо</div>`}</div>`;
+ h+=`<div class="s8"><div class="over">Журнал</div>${list.length?`<div class="list">${list.map(f=>`<div class="li"><button class="grow" style="background:none;border:0;text-align:left;color:inherit;min-height:44px" onclick="openSheet('foodEdit',${f.id})"><div class="t14 w6">${esc(f.name)} <span class="sec" style="font-weight:400">${fmtNum(f.amount)} ${esc(f.unit)}</span>${f.per&&f.per.ai?' <span class="t12 acc" style="font-weight:400">≈ АІ</span>':''}</div><div class="t12 ter">Б ${Math.round(f.p)} · Ж ${Math.round(f.f)} · В ${Math.round(f.c)}${+f.alc?' · алкоголь '+(+f.alc).toFixed(1).replace('.',',')+' г':''}</div></button><div class="t14 num">${f.kcal}</div><button class="ib" onclick="delFood(${f.id})" aria-label="Видалити">${ic('x',18)}</button></div>`).join('')}</div>`:`<div class="t14 ter">Поки порожньо</div>`}</div>`;
  return h}
 let _cntT=null;
 function saveCnt(){render();clearTimeout(_cntT);_cntT=setTimeout(async()=>{const row={athlete_id:st.me.id,day:dayIso(0,TODAY),water:st.cnt.water,coffee:st.cnt.coffee,alc:st.cnt.alc};try{D(await sb.from('daily_counters').upsert(row,{onConflict:'athlete_id,day'}));st.cnts[row.day]=row;checkNewAch()}catch(e){fail(e)}},400)}
-function parseIn(){const v=$('#foodin').value.trim();if(!v)return;st._foodTxt=v;st.parsed=parseFood(v);render()}
+function parseIn(){const v=$('#foodin').value.trim();if(!v)return;st._foodTxt=v;const r=parseFood(v);r.notes=[];r.pending=r.unknown.length>0;st.parsed=r;render();if(r.pending)aiFood(r)}
+/* unknown parts → AI estimate (cached server-side); local generic match is the fallback */
+function aiItem(i,src){const g=Math.max(1,Math.round(+i.grams||100)),k=100/g;
+ return {n:i.name_uk,q:g+' '+i.unit,g,unit:i.unit==='мл'?'мл':'г',kcal:Math.round(+i.kcal||0),p:+i.protein||0,f:+i.fat||0,c:+i.carbs||0,alc:+i.alcohol_g||0,coffee:0,ai:true,src,
+  per:{kcal:(+i.kcal||0)*k,p:(+i.protein||0)*k,f:(+i.fat||0)*k,c:(+i.carbs||0)*k,alc:(+i.alcohol_g||0)*k,coffee:false,ai:true}}}
+async function aiFood(r){const parts=r.unknown.slice();let data=null;
+ try{const res=await sb.functions.invoke('food-estimate',{body:{parts}});if(res.error)throw res.error;data=res.data}catch(e){console.error(e)}
+ if(st.parsed!==r)return; /* user started a new query */
+ const left=[];const key=t=>String(t).toLowerCase().replace(/ё/g,'е').replace(/[’ʼ'`]/g,'ʼ').replace(/\s+/g,' ').trim().slice(0,200);
+ for(const p of parts){const items=data&&data.results&&data.results[key(p)];
+  if(items&&items.length)items.forEach(i=>r.out.push(aiItem(i,p)));
+  else if(r.fallback&&r.fallback[p])r.out.push(r.fallback[p]);
+  else left.push(p)}
+ r.unknown=left;r.pending=false;
+ if(!data)r.notes.push(left.length?'АІ-оцінка зараз недоступна. Спробуйте пізніше або назвіть продукт інакше.':'');
+ else if(data.configured===false)r.notes.push('АІ ще не підключено, тому оцінюємо лише продукти з бази.');
+ else if(data.limited)r.notes.push('Ліміт АІ-оцінок на сьогодні вичерпано ('+(data.limit||60)+'). Завтра знову запрацює.');
+ r.notes=r.notes.filter(Boolean);render()}
+function setKcal(f,v){v=Math.max(0,Math.round(+v||0));const k=f.kcal>0?v/f.kcal:1;f.kcal=v;if(f.kcal&&k!==1){f.p*=k;f.f*=k;f.c*=k}
+ const r=100/Math.max(1,f.g);f.per={...f.per,kcal:v*r,p:f.p*r,f:f.f*r,c:f.c*r}}
 function scaleFood(f,g){g=Math.max(1,+g||1);const k=g/100;f.kcal=Math.round(f.per.kcal*k);f.p=f.per.p*k;f.f=f.per.f*k;f.c=f.per.c*k;f.alc=(f.per.alc||0)*k;f.coffee=f.per.coffee?Math.max(1,Math.round(g/200)):0;f.g=Math.round(g)}
 function updParsedLine(i,f){const cards=document.querySelectorAll('.pf');if(cards[i]){cards[i].querySelector('.pk').textContent=f.kcal+' ккал';cards[i].querySelector('.pm').textContent='Б '+Math.round(f.p)+' · Ж '+Math.round(f.f)+' · В '+Math.round(f.c)+(f.alc?' · алкоголь '+f.alc.toFixed(1).replace('.',',')+' г':'')}
  const sum=st.parsed.out.reduce((a,x)=>({k:a.k+x.kcal,al:a.al+(x.alc||0)}),{k:0,al:0});const p=document.getElementById('psum');if(p)p.innerHTML='<b class="w7">'+sum.k+' ккал</b>'+(sum.al?' <span class="sec">· '+(sum.al/10).toFixed(1).replace('.',',')+' станд. порції алкоголю</span>':'')}
 function parsedBlock(){const r=st.parsed;const sum=r.out.reduce((a,f)=>({k:a.k+f.kcal,al:a.al+f.alc}),{k:0,al:0});
- return `<div class="s12">${r.out.map((f,i)=>`<div class="card flat s8 pf"><div class="between"><div class="t14 w6">${esc(f.n)}</div><div class="t14 num pk">${f.kcal} ккал</div></div>
+ return `<div class="s12">${r.out.map((f,i)=>`<div class="card flat s8 pf"><div class="between"><div class="t14 w6">${esc(f.n)}${f.ai?` <span class="tag a" style="height:20px;font-size:11px;padding:0 6px;vertical-align:1px">≈ оцінка АІ</span>`:''}</div><div class="t14 num pk">${f.kcal} ккал</div></div>
   <div class="t12 ter pm">Б ${Math.round(f.p)} · Ж ${Math.round(f.f)} · В ${Math.round(f.c)}${f.alc?' · алкоголь '+f.alc.toFixed(1).replace('.',',')+' г':''}</div>
-  ${nf({id:'fq'+i,val:f.g,min:f.unit==='мл'?10:5,max:f.unit==='мл'?2000:1500,step:f.unit==='мл'?10:5,unit:f.unit,plus:true,set:v=>{scaleFood(f,v);updParsedLine(i,f)}})}</div>`).join('')}
- ${r.unknown.map(u=>`<div class="li" style="min-height:48px"><div class="grow t14 c-warn">Не впізнали: «${esc(u)}». Спробуйте інакше назвати продукт.</div></div>`).join('')}</div>
+  ${nf({id:'fq'+i,val:f.g,min:f.unit==='мл'?10:5,max:f.unit==='мл'?2000:1500,step:f.unit==='мл'?10:5,unit:f.unit,plus:true,set:v=>{scaleFood(f,v);updParsedLine(i,f);if(f.ai&&NF['fk'+i])nfSyncView('fk'+i,f.kcal,false)}})}
+  ${f.ai?nf({id:'fk'+i,label:'Калорії, якщо знаєте точніше',val:f.kcal,min:0,max:3000,step:1,unit:'ккал',set:v=>{setKcal(f,v);updParsedLine(i,f)}}):''}</div>`).join('')}
+ ${r.pending?`<div class="li" style="min-height:48px"><span class="spin" style="color:var(--acc)"></span><div class="grow t14 sec">Оцінюємо через АІ: «${esc(r.unknown.join('», «'))}»…</div></div>`:''}
+ ${(r.notes||[]).map(t=>`<div class="note">${ic('info',20)}<span>${esc(t)}</span></div>`).join('')}
+ ${r.pending?'':r.unknown.map(u=>`<div class="li" style="min-height:48px"><div class="grow t14 c-warn">Не впізнали: «${esc(u)}». Спробуйте інакше назвати продукт.</div></div>`).join('')}</div>
  <div class="between"><div class="t14" id="psum"><b class="w7">${sum.k} ккал</b>${sum.al?` <span class="sec">· ${(sum.al/10).toFixed(1).replace('.',',')} станд. порції алкоголю</span>`:''}</div></div>
- ${r.out.length?`<button class="btn p" onclick="addParsed(this)">Додати в журнал</button>`:''}`}
+ ${r.out.length?`<button class="btn p" ${r.pending?'disabled':''} onclick="addParsed(this)">Додати в журнал</button>`:''}`}
 async function addParsed(btn){await busy(btn,async()=>{const day=dayIso(0,TODAY);
  const rows=st.parsed.out.map(f=>({athlete_id:st.me.id,day,name:f.n,amount:f.g,unit:f.unit,kcal:f.kcal,p:+f.p.toFixed(1),f:+f.f.toFixed(1),c:+f.c.toFixed(1),alc:+(f.alc||0).toFixed(1),per:f.per}));
  const saved=D(await sb.from('food_entries').insert(rows).select());st.food=st.food.concat(saved);

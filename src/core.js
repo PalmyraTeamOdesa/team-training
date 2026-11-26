@@ -194,58 +194,7 @@ const LESSONS=[
  {t:'Сон теж тренування',m:'2 хв',body:'Менше 6 годин сну знижує потужність і підвищує ризик травм. Якщо спали погано, обирайте легке тренування.'}
 ];
 /* ---------- NUTRITION ---------- */
-const FOOD=[
- {k:['свинин'],n:'Свинина',kcal:242,p:27,f:14,c:0},
- {k:['курк','куряч','курят','курин'],n:'Курка',kcal:165,p:31,f:3.6,c:0},
- {k:['яловичин','говядин'],n:'Яловичина',kcal:250,p:26,f:15,c:0},
- {k:['лосос','риб','скумбр','тунц'],n:'Риба',kcal:180,p:22,f:10,c:0},
- {k:['гречк'],n:'Гречка',kcal:110,p:4,f:1,c:21},
- {k:['рис'],n:'Рис',kcal:130,p:2.7,f:.3,c:28},
- {k:['вівсян'],n:'Вівсянка',kcal:88,p:3,f:1.7,c:15},
- {k:['макарон','паст'],n:'Макарони',kcal:158,p:6,f:1,c:31},
- {k:['картопл'],n:'Картопля',kcal:86,p:2,f:.1,c:20},
- {k:['хліб'],n:'Хліб',kcal:250,p:8,f:3,c:48,piece:30},
- {k:['яйц','яєц','яйце'],n:'Яйця',kcal:155,p:13,f:11,c:1,piece:55},
- {k:['банан'],n:'Банан',kcal:89,p:1,f:.3,c:23,piece:120},
- {k:['яблук'],n:'Яблуко',kcal:52,p:.3,f:.2,c:14,piece:180},
- {k:['кисломол'],n:'Кисломолочний сир',kcal:120,p:17,f:5,c:3},
- {k:['сирник'],n:'Сирники',kcal:220,p:12,f:10,c:20,piece:60},
- {k:['сир'],n:'Сир твердий',kcal:350,p:25,f:27,c:2},
- {k:['йогурт'],n:'Йогурт',kcal:60,p:5,f:1.5,c:7},
- {k:['кефір'],n:'Кефір',kcal:50,p:3,f:2.5,c:4,unit:'ml'},
- {k:['молок'],n:'Молоко',kcal:52,p:3,f:2.5,c:4.7,unit:'ml'},
- {k:['борщ'],n:'Борщ',kcal:50,p:2,f:2,c:6},
- {k:['салат','овоч','огір','помідор','капуст'],n:'Овочі',kcal:30,p:1.5,f:.2,c:5},
- {k:['сало','сала'],n:'Сало',kcal:770,p:2,f:85,c:0},
- {k:['горіх','мигдал'],n:'Горіхи',kcal:600,p:20,f:52,c:14},
- {k:['шоколад'],n:'Шоколад',kcal:540,p:6,f:31,c:57},
- {k:['протеїн'],n:'Протеїн',kcal:380,p:78,f:6,c:8,piece:30},
- {k:['піц'],n:'Піца',kcal:266,p:11,f:10,c:33,piece:110},
- {k:['мед'],n:'Мед',kcal:320,p:0,f:0,c:82},
- {k:['віскі','коньяк','горілк'],n:'Міцний алкоголь',kcal:231,p:0,f:0,c:0,alc:33,unit:'ml',piece:50},
- {k:['вин'],n:'Вино',kcal:83,p:0,f:0,c:2.6,alc:10,unit:'ml',piece:150},
- {k:['пив'],n:'Пиво',kcal:43,p:.5,f:0,c:3.6,alc:4,unit:'ml',piece:500},
- {k:['кав'],n:'Кава',kcal:2,p:0,f:0,c:0,unit:'ml',piece:200,coffee:true},
- {k:['гель'],n:'Енергетичний гель',kcal:100,p:0,f:0,c:25,piece:40},
- {k:['батончик'],n:'Батончик',kcal:400,p:8,f:12,c:62,piece:50}
-];
-function parseFood(text){
- const parts=text.toLowerCase().replace(/[’ʼ']/g,'').split(/\s*(?:,|;|\+|\sі\s|\sта\s|\sй\s|\sз\s)\s*/).filter(x=>x.trim());
- const out=[],unknown=[];
- for(const part of parts){
-  const food=FOOD.find(f=>f.k.some(k=>part.includes(k)));
-  if(!food){unknown.push(part.trim());continue}
-  const m=part.match(/(\d+(?:[.,]\d+)?)\s*(кг|гр|г|мл|л|шт|склянк|склянок|чашк|порці)?/);
-  const qty=m?parseFloat(m[1].replace(',','.')):null;const unit=m&&m[2]?m[2]:null;let g;
-  if(unit){if(unit==='кг'||unit==='л')g=qty*1000;else if(unit==='шт'||unit==='порці')g=qty*(food.piece||150);else if(unit.startsWith('склян')||unit==='чашк')g=qty*250;else g=qty}
-  else if(qty!=null)g=(food.piece&&qty<=10)?qty*food.piece:qty;
-  else g=food.piece||(food.unit==='ml'?250:150);
-  const f=g/100;
-  const u=food.unit==='ml'?'мл':'г';
-  out.push({n:food.n,q:Math.round(g)+' '+u,g:Math.round(g),unit:u,kcal:Math.round(food.kcal*f),p:(food.p||0)*f,f:(food.f||0)*f,c:(food.c||0)*f,alc:(food.alc||0)*f,coffee:food.coffee?Math.max(1,Math.round(g/200)):0,per:{kcal:food.kcal,p:food.p||0,f:food.f||0,c:food.c||0,alc:food.alc||0,coffee:!!food.coffee}});
- }
- return {out,unknown};
-}
+/* FOOD + parseFood live in fooddb.js */
 const MEALPLANS=[
  {t:'День інтервалів · 2 400 ккал',items:['Сніданок: вівсянка 80 г, банан, йогурт','Перед тренуванням: рис 150 г, курка 120 г','Після: кисломолочний сир 200 г, мед','Вечеря: риба 200 г, овочі, гречка 150 г']},
  {t:'День відпочинку · 2 000 ккал',items:['Сніданок: омлет з 3 яєць, овочі','Обід: борщ, яловичина 150 г','Перекус: горіхи 30 г, яблуко','Вечеря: курка 200 г, салат']},
