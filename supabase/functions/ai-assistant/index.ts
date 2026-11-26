@@ -1,5 +1,8 @@
 // AI assistant for TRITON team: sport & health topics only.
-// Requires secret GEMINI_API_KEY (optional GEMINI_MODEL). Without it returns {configured:false}.
+// Uses the xAI API (OpenAI-compatible chat completions). The key is read server-side from
+// Supabase Vault (secret name `xai_api_key`, via public.get_app_secret, service role only)
+// or from the Edge Function secret XAI_API_KEY. Model: Vault `xai_model` / env XAI_MODEL.
+// Without a key it returns {configured:false}.
 import { createClient } from "npm:@supabase/supabase-js@2.119.2";
 
 const CORS = {
@@ -17,6 +20,12 @@ const RED_FLAGS = [
   /серцебитт/i, /серце\s*(калатає|зупиня|колоти)/i, /кров\s*(у|в|з)/i, /кровотеч/i, /перелом/i, /гостр\w*\s*біль/i,
   /сильн\w*\s*біль/i, /температур\w*\s*(3[89]|4\d)/i, /судом/i, /інсульт/i, /інфаркт/i, /травмува/i,
 ];
+
+const DEFAULT_MODEL = "grok-4.20-0309-non-reasoning"; // cheapest current chat model, no reasoning tokens
+const MAX_TOKENS = 350;       // cap per answer
+const LIMIT_ATHLETE = 30;     // messages per day (Europe/Kyiv)
+const LIMIT_COACH = 100;      // coach: higher cap
+const XAI_URL = "https://api.x.ai/v1/chat/completions";
 
 const SYSTEM = `Ти — АІ-асистент велосипедної і тріатлонної команди TRITON (Одеса). Тренер команди — Дмитро.
 Відповідай українською, коротко (до 120 слів), дружньо і конкретно.
@@ -40,9 +49,9 @@ Deno.serve(async (req) => {
 
   let body: { messages?: { role: string; text: string }[] } = {};
   try { body = await req.json(); } catch { return json({ error: "bad json" }, 400); }
-  const msgs = (body.messages ?? []).slice(-12).map((m) => ({
-    role: m.role === "user" ? "user" : "model",
-    text: String(m.text ?? "").slice(0, 2000),
+  const msgs = (body.messages ?? []).slice(-8).map((m) => ({
+    role: m.role === "user" ? "user" : "assistant",
+    text: String(m.text ?? "").slice(0, 1500),
   })).filter((m) => m.text);
   const last = [...msgs].reverse().find((m) => m.role === "user")?.text ?? "";
   if (!last) return json({ error: "empty" }, 400);
@@ -60,27 +69,54 @@ Deno.serve(async (req) => {
       })));
     }
     return json({
-      configured: !!Deno.env.get("GEMINI_API_KEY"),
+      configured: true,
       redflag: true,
       text: "Це може бути серйозно. Припиніть тренування і зверніться до лікаря. Якщо симптоми сильні або раптові — телефонуйте 103. Я повідомив тренера Дмитра.",
     });
   }
 
-  const key = Deno.env.get("GEMINI_API_KEY");
+  const secret = async (name: string, env: string) => {
+    const e = Deno.env.get(env);
+    if (e) return e;
+    const { data } = await admin.rpc("get_app_secret", { p_name: name });
+    return (data as string | null) || null;
+  };
+  const key = await secret("xai_api_key", "XAI_API_KEY");
   if (!key) return json({ configured: false, text: "АІ ще не підключено" });
+  const model = (await secret("xai_model", "XAI_MODEL")) || DEFAULT_MODEL;
 
-  const model = Deno.env.get("GEMINI_MODEL") || "gemini-2.5-flash";
-  const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
+  const { data: isCoach } = await admin.from("coaches").select("user_id").eq("user_id", uid).maybeSingle();
+  const limit = isCoach ? LIMIT_COACH : LIMIT_ATHLETE;
+  const { data: take, error: te } = await admin.rpc("ai_usage_take", { p_user: uid, p_limit: limit });
+  if (te) return json({ configured: true, error: "usage_error" }, 500);
+  const t0 = Array.isArray(take) ? take[0] : take;
+  if (!t0?.allowed) {
+    return json({
+      configured: true, limited: true, limit, used: t0?.used ?? limit,
+      text: `Ліміт запитань до асистента на сьогодні вичерпано (${limit}). Завтра він знову буде доступний. З терміновими питаннями пишіть тренеру в чат.`,
+    });
+  }
+
+  const r = await fetch(XAI_URL, {
     method: "POST",
-    headers: { "Content-Type": "application/json", "x-goog-api-key": key },
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
     body: JSON.stringify({
-      systemInstruction: { parts: [{ text: SYSTEM + (kid ? "\nКористувач — дитина до 18 років." : "") + `\nІмʼя користувача: ${name}.` }] },
-      contents: msgs.map((m) => ({ role: m.role, parts: [{ text: m.text }] })),
-      generationConfig: { maxOutputTokens: 600, temperature: 0.5 },
+      model,
+      max_tokens: MAX_TOKENS,
+      temperature: 0.5,
+      messages: [
+        { role: "system", content: SYSTEM + (kid ? "\nКористувач — дитина до 18 років." : "") + `\nІмʼя користувача: ${name}.` },
+        ...msgs.map((m) => ({ role: m.role, content: m.text })),
+      ],
     }),
   });
-  if (!r.ok) return json({ configured: true, error: "ai_error", status: r.status }, 502);
+  if (!r.ok) {
+    console.error("xai status", r.status);
+    return json({ configured: true, error: "ai_error", status: r.status }, 502);
+  }
   const d = await r.json();
-  const text = d?.candidates?.[0]?.content?.parts?.map((p: { text?: string }) => p.text ?? "").join("").trim();
-  return json({ configured: true, text: text || "Не вдалося отримати відповідь. Спробуйте ще раз." });
+  const text = String(d?.choices?.[0]?.message?.content ?? "").trim();
+  const tk = Number(d?.usage?.total_tokens ?? 0);
+  if (tk) await admin.rpc("ai_usage_add_tokens", { p_user: uid, p_tokens: tk });
+  return json({ configured: true, used: t0.used, limit, text: text || "Не вдалося отримати відповідь. Спробуйте ще раз." });
 });

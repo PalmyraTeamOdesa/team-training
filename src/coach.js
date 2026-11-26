@@ -1,7 +1,7 @@
 /* ---------- COACH DATA ---------- */
 async function loadCoach(){
  const from=dayIso(-4,0);
- const [profs,req,plans,logs,well,wts,notes,aw,unl]=await Promise.all([
+ const [profs,req,plans,logs,well,wts,notes,aw,unl,aiu]=await Promise.all([
   sb.from('profiles').select('*').order('full_name'),
   sb.from('change_requests').select('*').order('created_at',{ascending:false}).limit(200),
   sb.from('plan_weeks').select('*').gte('week_start',wkIso(-4)),
@@ -10,11 +10,12 @@ async function loadCoach(){
   sb.from('weights').select('*').gte('day',dayIso(-8,0)).order('day'),
   sb.from('coach_notes').select('*'),
   sb.from('awards').select('*'),
-  sb.from('plan_unlocks').select('*')]);
+  sb.from('plan_unlocks').select('*'),
+  sb.from('ai_usage').select('*').gte('day',wkIso(0))]);
  const coachIds=new Set(st.members.filter(m=>m.is_coach).map(m=>m.id));coachIds.add(st.me.id);
  st.athletes=D(profs).filter(r=>!coachIds.has(r.id)).map(r=>{const p=toP(r);return {id:r.id,name:p.name,ini:p.ini,age:p.age,group:p.group,status:r.status,onboarded:r.onboarded,p}});
  st.requests=D(req);D(plans).forEach(r=>st.plans[r.athlete_id+'|'+r.week_start]=r);st.allLogs=D(logs);st.allWell=D(well);st.allWeights=D(wts);
- st.coachNote={};D(notes).forEach(n=>st.coachNote[n.athlete_id]=n.note);st.allAwards=D(aw);st.unlocks={};D(unl).forEach(u=>st.unlocks[u.athlete_id]=u);
+ st.coachNote={};D(notes).forEach(n=>st.coachNote[n.athlete_id]=n.note);st.allAwards=D(aw);st.aiUse={};D(aiu).forEach(u=>{const o=st.aiUse[u.user_id]||(st.aiUse[u.user_id]={msgs:0,tokens:0});o.msgs+=u.msgs;o.tokens+=u.tokens});st.unlocks={};D(unl).forEach(u=>st.unlocks[u.athlete_id]=u);
 }
 function aStatus(a){const wl=st.allWell.filter(w=>w.athlete_id===a.id).sort((x,y)=>x.day<y.day?1:-1);const recent=wl.filter(w=>w.day>=dayIso(0,TODAY-2>=0?TODAY-2:0)||w.day>=iso(new Date(Date.now()-2*864e5)));
  const badW=recent.filter(w=>wellBad(w)>=2).length;const sk=st.allLogs.filter(l=>l.athlete_id===a.id&&l.status==='skipped'&&l.day>=iso(new Date(Date.now()-7*864e5)));
@@ -88,12 +89,13 @@ async function giveAward(btn,id,achId){const a=achId?ACH.find(x=>x.id===achId):n
  await busy(btn,async()=>{const r=D(await sb.from('awards').insert({athlete_id:id,achievement_id:achId||null,name,description:a?a.desc:($('#awd').value||'').trim(),icon:a?a.icon:'star'}).select().single());(st.allAwards=st.allAwards||[]).push(r);closeSheet();toast('Нагороду вручено: '+name)})}
 
 /* weekly report */
-SHEETS.report=()=>{const act=st.athletes.filter(a=>a.status==='active');const rows=act.map(a=>{const c=weekCompl(a.id,0);const sk=st.allLogs.filter(l=>l.athlete_id===a.id&&l.status==='skipped'&&l.day>=dayIso(0,0)).length;const L=st.allLogs.filter(l=>l.athlete_id===a.id&&l.status==='done'&&l.day>=dayIso(0,0));const min=L.reduce((x,l)=>x+(l.duration_min||0),0);return {a,c,sk,min,s:aStatus(a)}}).sort((x,y)=>y.c.pct-x.c.pct);
- const tot=rows.reduce((x,r)=>x+r.min,0);const avg=rows.length?Math.round(rows.reduce((x,r)=>x+r.c.pct,0)/rows.length):0;
+SHEETS.report=()=>{const act=st.athletes.filter(a=>a.status==='active');const rows=act.map(a=>{const c=weekCompl(a.id,0);const sk=st.allLogs.filter(l=>l.athlete_id===a.id&&l.status==='skipped'&&l.day>=dayIso(0,0)).length;const L=st.allLogs.filter(l=>l.athlete_id===a.id&&l.status==='done'&&l.day>=dayIso(0,0));const min=L.reduce((x,l)=>x+(l.duration_min||0),0);return {a,c,sk,min,ai:(st.aiUse&&st.aiUse[a.id])||{msgs:0,tokens:0},s:aStatus(a)}}).sort((x,y)=>y.c.pct-x.c.pct);
+ const tot=rows.reduce((x,r)=>x+r.min,0);const aiAll=Object.values(st.aiUse||{}).reduce((x,u)=>({m:x.m+u.msgs,t:x.t+u.tokens}),{m:0,t:0});const aiCost=aiAll.t*0.0000013;const avg=rows.length?Math.round(rows.reduce((x,r)=>x+r.c.pct,0)/rows.length):0;
  const txt='Звіт '+weekRange(0)+'\n'+rows.map(r=>r.a.name+': '+r.c.dn+'/'+r.c.tr+' ('+r.c.pct+'%), '+fmtMin(r.min)+(r.sk?', пропусків '+r.sk:'')).join('\n');st._reportTxt=txt;
  return {title:'Тижневий звіт',full:true,body:`<div class="stack"><div class="t14 sec">${weekRange(0)} · станом на ${DAYS_FULL[TODAY].toLowerCase()}</div>
  <div class="grid3"><div class="tile"><div class="v">${avg}%</div><div class="l">сер. виконання</div></div><div class="tile"><div class="v">${fmtNum(tot/60)}</div><div class="l">годин разом</div></div><div class="tile"><div class="v">${rows.filter(r=>r.s.s!=='ok').length}</div><div class="l">увага</div></div></div>
- ${rows.length?`<div class="list">${rows.map(r=>`<button class="li" onclick="openSheet('athlete','${r.a.id}')"><span class="sd ${r.s.s==='ok'?'ok':r.s.s}"></span><div class="grow"><div class="t14 w6 ell">${esc(r.a.name)}</div><div class="t12 sec">${fmtMin(r.min)}${r.sk?' · пропусків '+r.sk:''}${r.s.reason?' · '+esc(r.s.reason):''}</div></div><div class="t14 num">${r.c.dn}/${r.c.tr}</div></button>`).join('')}</div>`:emptyBox('Немає активних спортсменів')}</div>`,
+ <div class="note">${ic('spark',20)}<span>АІ-асистент цього тижня: <b style="color:var(--tx)">${aiAll.m}</b> запитань, ≈ $${aiCost.toFixed(2)}</span></div>
+ ${rows.length?`<div class="list">${rows.map(r=>`<button class="li" onclick="openSheet('athlete','${r.a.id}')"><span class="sd ${r.s.s==='ok'?'ok':r.s.s}"></span><div class="grow"><div class="t14 w6 ell">${esc(r.a.name)}</div><div class="t12 sec">${fmtMin(r.min)}${r.sk?' · пропусків '+r.sk:''}${r.ai.msgs?' · АІ: '+r.ai.msgs:''}${r.s.reason?' · '+esc(r.s.reason):''}</div></div><div class="t14 num">${r.c.dn}/${r.c.tr}</div></button>`).join('')}</div>`:emptyBox('Немає активних спортсменів')}</div>`,
  foot:`<button class="btn s" onclick="copyReport()">${ic('share',20)} Скопіювати звіт</button>`}};
 async function copyReport(){try{if(navigator.share)await navigator.share({text:st._reportTxt});else{await navigator.clipboard.writeText(st._reportTxt);toast('Звіт скопійовано')}}catch(e){}}
 
