@@ -279,3 +279,12 @@ html.is-ios .phone,html.is-ipad .phone{max-width:100%;height:100vh;height:100dvh
 .inst-ill.share .ill-lbl{font-size:11px;color:var(--tx2);margin-top:6px;text-align:center}
 .inst-ill.home .ill-row{display:flex;align-items:center;gap:10px;background:var(--s3);border-radius:14px;padding:12px 14px;font-weight:650;width:100%}
 .inst-ill.add .ill-add{background:#0A84FF;color:#fff;font-weight:700;font-size:17px;padding:8px 22px;border-radius:12px}
+
+.frow .nf-box{border-color:var(--acc);box-shadow:0 0 0 1px color-mix(in srgb,var(--acc) 35%,transparent)}
+.frow.unk .nf-box{border-color:var(--bd2);box-shadow:none}
+.frow.unk .frow-in{opacity:.55;cursor:pointer}
+.frow.unk .frow-in *{pointer-events:none}
+.unk-tg{min-height:44px;padding:0 4px 0 8px;border:0;background:none;color:var(--tx2);font-size:13px;display:inline-flex;align-items:center;gap:8px}
+.unk-tg .cb{width:20px;height:20px;border-radius:6px;border:1.5px solid var(--bd2);display:grid;place-items:center;color:#0B0F1A}
+.unk-tg.on{color:var(--tx)}
+.unk-tg.on .cb{background:var(--acc);border-color:var(--acc)}

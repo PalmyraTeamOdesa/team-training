@@ -4,7 +4,7 @@ function newOb(){const m=st.me||{};return {step:1,name:m.name&&m.name!=='Без 
  sports:{bike:{on:true,types:['road'],level:'beg',own:false},run:{on:false,level:'beg',own:false},swim:{on:false,level:'beg',own:false},gym:{on:false,level:'beg',own:false}},
  goals:[],targets:{ftp:'',weight:'',raceDate:'',raceDist:''},
  days:days([null,null,null,null,null,null,null]),
- equip:[],form:{ftp:'',ftpU:true,hrRest:'',hrRestU:true,hrMax:'',hrMaxU:true,run5k:'',run5kU:true,swim1500:'',swim1500U:true},
+ equip:[],form:{ftp:'',ftpU:false,hrRest:'',hrRestU:false,hrMax:'',hrMaxU:false,run5k:'',run5kU:false,swim1500:'',swim1500U:false},
  health:{inj:[],bp:'norm',notes:''},remind:'07:00',consent:false}}
 function startOnb(){st.ob=newOb();st.screen='onb';render();if(typeof navWrite==='function')navWrite(true)}
 function obView(){return onbView()}
@@ -53,13 +53,13 @@ function dayAct(src,i,k){const d=daysArr(src)[i];const j=d.acts.indexOf(k);if(j>
 function daySet(src,i,f,v){const d=daysArr(src)[i];if(f==='rest'){d.acts=[];closeSheet();render();return}d[f]=v;if(f!=='min')render()}
 function ob5(){const o=st.ob;return `<div class="chips">${Object.keys(EQUIP).map(e=>`<button class="chip ${o.equip.includes(e)?'on':''}" onclick="obToggleArr('equip','${e}')">${EQUIP[e]}</button>`).join('')}</div>
  ${!o.equip.includes('power')&&o.sports.bike.on?`<div class="note">${ic('info',20)}<span>Без пауерметра будуємо вело-тренування за пульсом і відчуттями.</span></div>`:''}`}
+function obUnk(key,on){const f=st.ob.form;f[key+'U']=on;if(on)f[key]='';render();if(!on)setTimeout(()=>{const i=document.getElementById('nfi-ob-'+key);if(i)i.focus()},30)}
 function formRow(label,key,opts){
- const o=st.ob.form,unk=o[key+'U'];opts=opts||{};
- const kind=opts.kind;const val=unk?'':(o[key]===''||o[key]==null?(opts.emptyVal||''):o[key]);
- const def=opts.def;
- return `<div class="s8"><div class="between"><span class="t12 sec w6">${label}</span>
-  <button class="chip ${unk?'on':''}" style="min-height:40px" onclick="st.ob.form.${key}U=!st.ob.form.${key}U;if(!st.ob.form.${key}U&&!st.ob.form.${key})st.ob.form.${key}='${def}';render()">Не знаю</button></div>
-  ${nf({id:'ob-'+key,val:kind? (o[key]||def):val,min:opts.min,max:opts.max,step:opts.step,unit:opts.unit||'',kind,disabled:unk,empty:true,ph:opts.ph||def,set:v=>obIn('form.'+key,kind?(kind==='time'?nfFmtTime(v):nfFmtClock(v)):v)})}
+ const o=st.ob.form,unk=!!o[key+'U'];opts=opts||{};
+ const kind=opts.kind;const val=unk?'':(o[key]==null?'':o[key]);
+ return `<div class="s8 frow ${unk?'unk':''}"><div class="between"><span class="t14 w6">${label}</span>
+  <button type="button" class="unk-tg ${unk?'on':''}" aria-pressed="${unk}" onclick="obUnk('${key}',${!unk})"><span class="cb">${unk?ic('check',14):''}</span>Не знаю</button></div>
+  <div class="frow-in" ${unk?`onclick="obUnk('${key}',false)"`:''}>${nf({id:'ob-'+key,val,min:opts.min,max:opts.max,step:opts.step,unit:opts.unit||'',kind,disabled:unk,empty:true,ph:unk?'Не знаю':(opts.ph||opts.def),set:v=>obIn('form.'+key,v===''?'':(kind?(kind==='time'?nfFmtTime(v):nfFmtClock(v)):v))})}</div>
  </div>`}
 function ob6(){const o=st.ob;let h='';
  if(o.sports.bike.on)h+=formRow('FTP','ftp',{min:80,max:500,step:5,unit:'Вт',def:'200',ph:'250'});
@@ -67,7 +67,7 @@ function ob6(){const o=st.ob;let h='';
  h+=formRow('Макс. пульс','hrMax',{min:140,max:220,step:1,unit:'уд/хв',def:'185'});
  if(o.sports.run.on)h+=formRow('5 км','run5k',{kind:'time',min:12*60,max:50*60,step:5,unit:'хв:с',def:'25:00',ph:'25:00'});
  if(o.sports.swim.on)h+=formRow('1500 м','swim1500',{kind:'time',min:16*60,max:60*60,step:5,unit:'хв:с',def:'32:00',ph:'32:00'});
- const unk=(o.sports.bike.on&&o.form.ftpU)||(o.sports.run.on&&o.form.run5kU)||(o.sports.swim.on&&o.form.swim1500U);
+ const nk=k=>o.form[k+'U']||o.form[k]===''||o.form[k]==null;const unk=(o.sports.bike.on&&nk('ftp'))||(o.sports.run.on&&nk('run5k'))||(o.sports.swim.on&&nk('swim1500'));
  return h+(unk?`<div class="note">${ic('target',20)}<span>Додамо тести на перший тиждень: так зони будуть точними.</span></div>`:'')}
 function ob7(){const o=st.ob;return `<div class="field"><label>Травми і обмеження</label><div class="chips">${['Коліна','Спина','Плечі','Гомілкостоп','Немає'].map(t=>`<button class="chip ${o.health.inj.includes(t)?'on':''}" onclick="obToggleArr('health.inj','${t}')">${t}</button>`).join('')}</div></div>
  <div class="field"><label>Тиск</label>${seg([['low','Знижений'],['norm','Норма'],['high','Підвищений']],o.health.bp,"(v=>{st.ob.health.bp=v;render()})")}</div>
@@ -78,7 +78,7 @@ function ob8(){const o=st.ob;return `${nf({id:'ob-remind',label:'Нагадув�
  <div class="t12 ter">Інші спортсмени бачать лише те, чим ви поділитесь самі</div>`}
 function obProfile(){const o=st.ob;const f=o.form;return {id:st.me.id,created:st.me.created,onboarded:true,name:o.name.trim(),short:(cleanName(o.name)||o.name.trim()).split(' ')[0],ini:initials(o.name),sex:o.sex,age:+o.age,height:+o.height||175,weight:+String(o.weight).replace(',','.')||75,city:o.city,group:+o.age<18?'Діти':'Новачки',
  sports:JSON.parse(JSON.stringify(o.sports)),goals:o.goals.slice(),targets:{ftp:+o.targets.ftp||0,weight:+o.targets.weight||0,raceDate:o.targets.raceDate,raceDist:o.targets.raceDist},
- days:JSON.parse(JSON.stringify(o.days)),equip:o.equip.slice(),form:{ftp:f.ftpU?0:+f.ftp||0,hrRest:f.hrRestU?0:+f.hrRest,hrMax:f.hrMaxU?0:+f.hrMax,run5k:f.run5kU?'':f.run5k,swim1500:f.swim1500U?'':f.swim1500},
+ days:JSON.parse(JSON.stringify(o.days)),equip:o.equip.slice(),form:{ftp:f.ftpU?0:+f.ftp||0,hrRest:f.hrRestU?0:+f.hrRest||0,hrMax:f.hrMaxU?0:+f.hrMax||0,run5k:f.run5kU?'':(f.run5k||''),swim1500:f.swim1500U?'':(f.swim1500||'')},
  health:JSON.parse(JSON.stringify(o.health)),remind:o.remind,consent:o.consent,races:o.targets.raceDate?[{name:'Мій старт',date:o.targets.raceDate,dist:o.targets.raceDist?((/км/.test(String(o.targets.raceDist))?o.targets.raceDist:o.targets.raceDist+' км')):''}]:[],weightHist:Array(8).fill(+o.weight||75),ftpHist:Array(8).fill(+f.ftp||0)}}
 function obReady(){const p=obProfile();const g=genFor(p,0,1);if(weekN(p,0)===0)g.days.forEach(d=>{if(d.i<TODAY){d.items=[];d.rest=true}});const days_=g.days;const tr=days_.filter(d=>!d.rest);st._obDays=days_;
  return `<main><div class="stack" style="padding-top:24px"><div class="success"><div class="okcircle">${ic('check',28)}</div><div class="t28">Ваш план готовий</div><div class="t14 sec">${tr.length} тренувань · ${fmtMin(tr.reduce((a,d)=>a+dayMin(d),0))} · ${weekRange(0)}</div></div>
