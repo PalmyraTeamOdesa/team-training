@@ -140,7 +140,7 @@ function parseBoardLines(sec,text){const be=st._be||{pick:{}};return String(text
 SHEETS.bdEdit=()=>{const be=st._be;const s=secInfo(be.sec);const t=todayIso();
  const dchips=[[t,'Сьогодні'],[isoAdd(t,1),'Завтра'],[isoAdd(t,2),'Післязавтра']];
  return {title:'План · '+esc(s.name),full:true,body:`<div class="stack">
- <div class="chips scroll">${dchips.map(d=>`<button class="chip ${be.day===d[0]?'on':''}" onclick="bdEditDay('${d[0]}')">${d[1]}</button>`).join('')}<input class="inp" type="date" style="width:150px;height:36px" value="${be.day}" onchange="bdEditDay(this.value)"></div>
+ <div class="chips scroll">${dchips.map(d=>`<button class="chip ${be.day===d[0]?'on':''}" onclick="bdEditDay('${d[0]}')">${d[1]}</button>`).join('')}<input class="inp" type="date" style="width:140px;min-height:40px;height:40px;flex:none" value="${be.day}" onchange="bdEditDay(this.value)"></div>
  <div class="t12 ter">${dayLabel(be.day)}</div>
  <div class="row" style="gap:8px;flex-wrap:wrap"><button class="btn s sm" onclick="bdCopyPrev(this)">${ic('refresh',18)} Копіювати попередній</button>${(st._tpl||[]).map(tp=>`<button class="chip" onclick="bdUseTpl(${tp.id})">${ic('list',14)} ${esc(tp.title)}</button>`).join('')}</div>
  <label class="t14 w6">Загальний план</label>
@@ -149,7 +149,7 @@ SHEETS.bdEdit=()=>{const be=st._be;const s=secInfo(be.sec);const t=todayIso();
  <textarea class="inp ta mono" id="bel" rows="5" maxlength="4000" placeholder="Віталік: 10×500&#10;Світа: 5×1000" oninput="bdLinesInput(this)" onclick="bdLinesInput(this)" onkeyup="bdLinesInput(this)">${esc(be.lines)}</textarea>
  <div id="besug" class="chips"></div>
  <div id="beprev">${bdPreview()}</div>
- </div>`,foot:`<div class="row" style="gap:8px;width:100%"><button class="btn s" onclick="bdSaveTpl(this)" aria-label="Зберегти як шаблон">${ic('list',20)}</button><button class="btn p grow" onclick="bdSave(this)">Опублікувати</button></div>`}};
+ </div>`,foot:`<button class="btn s" style="flex:none;width:56px;padding:0" onclick="bdSaveTpl(this)" aria-label="Зберегти як шаблон" title="Зберегти як шаблон">${ic('list',20)}</button><button class="btn p" style="flex:1;width:auto;min-width:0" onclick="bdSave(this)">Опублікувати</button>`}};
 function bdEditDay(d){if(!d)return;st._be.day=d;const b=boardOf(st._be.sec,d);if(!b)loadBoard(st._be.sec,d).then(()=>renderSheet());renderSheet()}
 function bdPreview(){const be=st._be;const rows=parseBoardLines(be.sec,be.lines);if(!rows.length)return `<div class="t12 ter">Підказка: почніть рядок з імені — застосунок запропонує спортсмена з секції.</div>`;
  return `<div class="list">${rows.map(r=>{

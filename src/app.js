@@ -24,13 +24,14 @@ function hhmm(ts){const d=new Date(ts);return (d.getHours()<10?'0':'')+d.getHour
 let sheetStack=[];
 function render(){
  const app=$('#app');const m=app.querySelector('main');const sc=m?m.scrollTop:0;const key=st.screen+st.tab+st.ctab;
- if(st.screen==='boot')app.innerHTML=`<div class="boot"><div class="logo">T</div></div>`;
+ if(st.screen==='boot')app.innerHTML=`<div class="boot">${logoHtml()}</div>`;
  else if(st.screen==='auth')app.innerHTML=authView();
  else if(st.screen==='onb')app.innerHTML=onbView();
  else app.innerHTML=headerView()+'<main id="main">'+(isCoach()?coachView():athleteView())+'</main>'+tabsView();
  const m2=app.querySelector('main');if(m2&&render._k===key)m2.scrollTop=sc;render._k=key;
  renderSheet();
 }
+function logoHtml(){return window.__LOGO?'<img class="logo logoimg" src="icons/logo-256.png" alt="TRITON" width="88" height="88">':'<div class="logo">T</div>'}
 function go(tab){if(isCoach())st.ctab=tab;else st.tab=tab;const m=$('main');if(m)m.scrollTop=0;render._k='';render();onTab(tab)}
 function headerView(){
  const p=me();const titles={today:'Сьогодні',plan:'План',team:'Команда',sec:'Секції',food:'Харчування',prog:'Прогрес'};

@@ -3,7 +3,7 @@ st.authMode='login';
 function authView(){const m=st.authMode;
  const title={login:'Вхід',signup:'Реєстрація',forgot:'Відновити пароль'}[m];
  return `<main><div class="stack" style="padding-top:40px">
- <div class="login-hero"><div class="logo">T</div><div class="t28">TRITON Team</div><div class="t14 sec">Тренування команди · Одеса</div></div>
+ <div class="login-hero">${logoHtml()}<div class="t28">TRITON Team</div><div class="t14 sec">Тренування команди · Одеса</div></div>
  <div class="card s12"><div class="t20">${title}</div>
  ${m==='signup'?`<div class="field"><label>Імʼя і прізвище</label><input class="inp" id="a-name" autocomplete="name" placeholder="Олександр Петренко"></div>`:''}
  <div class="field"><label>Email</label><input class="inp" id="a-email" type="email" autocomplete="email" inputmode="email" placeholder="you@example.com" value="${esc(st._authEmail||'')}"></div>

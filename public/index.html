@@ -11,12 +11,14 @@
 <meta name="description" content="Тренування команди TRITON Triathlon Team, Одеса">
 <title>TRITON Team</title>
 <link rel="manifest" href="manifest.webmanifest">
-<link rel="icon" href="icons/icon-192.png">
-<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="icon" href="icons/favicon.ico" sizes="any">
+<link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png?v=__BUILD__">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=__BUILD__">
 <link rel="stylesheet" href="style.css?v=__BUILD__">
 </head>
 <body>
 <div class="vp"><div class="phone"><div id="app"><div class="boot"><div class="logo">T</div></div></div><div class="scrim" id="scrim" onclick="closeAll()"></div><div class="toast" id="toast"></div></div></div>
+<script>window.__LOGO=__HAS_LOGO__</script>
 <script src="vendor.js?v=__BUILD__"></script>
 <script src="app.js?v=__BUILD__"></script>
 <script>if('serviceWorker' in navigator){addEventListener('load',()=>navigator.serviceWorker.register('sw.js'))}</script>
