@@ -1,8 +1,9 @@
 /* ---------- TEAM (athlete) ---------- */
 function teamView(){
  if(st.me.status!=='active')return `<div class="stack">${pendingBanner()}${emptyBox('Команда відкриється після підтвердження','Тренер отримав вашу заявку. Поки можна писати тренеру напряму.')}<button class="btn p" onclick="openSheet('dm','${coachId()||''}')">${ic('msg',20)} Написати тренеру</button></div>`;
- let h=`<div class="stack">${seg([['feed','Стрічка'],['rate','Рейтинг'],['events','Події'],['chat','Чат']],st.teamSeg,'teamSeg')}`;
- h+=({feed:feedBody,rate:rateBody,events:eventsBody,chat:chatBody})[st.teamSeg]();
+ if(!['feed','rate','events'].includes(st.teamSeg))st.teamSeg='feed';
+ let h=`<div class="stack">${seg([['feed','Стрічка'],['rate','Рейтинг'],['events','Події']],st.teamSeg,'teamSeg')}`;
+ h+=({feed:feedBody,rate:rateBody,events:eventsBody})[st.teamSeg]();
  return h+'</div>'}
 function teamSeg(v){st.teamSeg=v;render();if(v==='rate')loadRating()}
 function coachId(){const c=st.members.find(m=>m.is_coach);return c?c.id:null}
@@ -14,7 +15,7 @@ function feedBody(){
  return h+list.map(postCard).join('')}
 function postCard(p){const a=memberById(p.author_id)||{};const mine=p.author_id===st.me.id;const likes=p.post_likes||[];const liked=likes.some(l=>l.user_id===st.me.id);const cm=(p.post_comments||[]).slice().sort((x,y)=>x.created_at<y.created_at?-1:1);
  return `<div class="card s12">
-  <div class="row12">${avOf(p.author_id)}<div class="grow"><div class="t14 w6 ell">${esc(nameOf(p.author_id))}</div><div class="t12 ter">${ago(p.created_at)}${a.group_name?' · '+esc(a.group_name):''}</div></div>${p.sport?`<span class="ico sm">${ic(SPORT[p.sport].i,18)}</span>`:`<span class="ico sm">${ic('cal',18)}</span>`}${mine||isCoach()?`<button class="ib" onclick="delPost(${p.id})" aria-label="Видалити">${ic('x',18)}</button>`:''}</div>
+  <div class="row12">${avOf(p.author_id)}<div class="grow"><div class="t14 w6 ell">${esc(nameOf(p.author_id))}</div><div class="t12 ter">${ago(p.created_at)}${a.group_name?' · '+esc(a.group_name):''}</div></div>${p.section_id&&SEC_DEF[p.section_id]?`<span class="secpill" style="--sc:${secInfo(p.section_id).color}">${ic(secInfo(p.section_id).icon,14)} ${esc(secInfo(p.section_id).name)}</span>`:p.sport&&SPORT[p.sport]?`<span class="ico sm">${ic(SPORT[p.sport].i,18)}</span>`:`<span class="ico sm">${ic('cal',18)}</span>`}${mine||isCoach()?`<button class="ib" onclick="delPost(${p.id})" aria-label="Видалити">${ic('x',18)}</button>`:''}</div>
   <div class="t16">${esc(p.title)}</div>
   ${p.kind==='plan'&&p.body?`<div class="t14 sec" style="white-space:pre-line">${esc(p.body)}</div>`:p.body?`<div class="t14 sec">${esc(p.body)}</div>`:''}
   ${p.photo_path?(PHOTO_URL[p.photo_path]?`<img class="post-photo" src="${PHOTO_URL[p.photo_path]}" alt="Фото тренування" loading="lazy">`:`<div class="post-photo"></div>`):''}
@@ -43,7 +44,7 @@ function rateBody(){
  let h=rm+seg([['adult','Дорослі'],['kid','Діти']],st.rateAge,'rateAge')+chipRow([['all','Уся команда'],['bike','Вело'],['run','Біг'],['swim','Плавання'],['Шосе','Шосе'],['Тріатлон','Тріатлон'],['Новачки','Новачки']],st.rateBy,'rateBy',true);
  h+=`<div class="t12 ter">Тиждень ${weekRange(0)} · рахуємо виконання плану (70%) і регулярність (30%), а не кілометри</div>`;
  if(!arr.length)return h+emptyBox('Нікого в цьому фільтрі');
- h+=`<div class="list">${arr.map((a,k)=>`<div class="li" style="${a.id===myId?'background:var(--acc-soft)':''}"><div class="t16 num ${k<3?'acc':'ter'}" style="width:20px;text-align:center">${k+1}</div><span class="av sm ${a.id===myId?'me':''}">${esc(initials(a.name))}</span><div class="grow"><div class="t14 w6 ell">${esc(a.name)}${a.id===myId?' · ви':''}</div><div class="t12 sec">План ${a.compl}% · регулярність ${a.cons}%</div></div><div class="t16 num">${a.score}</div></div>`).join('')}</div>`;
+ h+=`<div class="list">${arr.map((a,k)=>`<div class="li" style="${a.id===myId?'background:var(--acc-soft)':''}"><div class="t16 num ${k<3?'acc':'ter'}" style="width:20px;text-align:center">${k+1}</div><span class="av sm ${a.id===myId?'me':''}">${avIn(a.id,initials(a.name))}</span><div class="grow"><div class="t14 w6 ell">${esc(a.name)}${a.id===myId?' · ви':''}</div><div class="t12 sec">План ${a.compl}% · регулярність ${a.cons}%</div></div><div class="t16 num">${a.score}</div></div>`).join('')}</div>`;
  return h}
 function rateAge(v){st.rateAge=v;st.rateBy='all';render()}
 function rateBy(v){st.rateBy=v;render()}
@@ -78,7 +79,7 @@ function chatBody(){const cid=coachId();
  if(st.chatSeg==='coach')return h+coachesCard(null,'Тренери клубу')+dmThread(cid);
  return h+`<div class="s8" style="display:flex;flex-direction:column">${st.chat.length?st.chat.slice(-100).map(m=>msgBubble(m,true)).join(''):emptyBox('Напишіть першим','Тут спілкується вся команда')}</div>
  <div class="composer"><input class="inp" id="tchat" maxlength="4000" placeholder="Повідомлення команді" onkeydown="if(event.key==='Enter')sendTeam(this)"><button class="sendb" onclick="sendTeam(this)" aria-label="Надіслати">${ic('send',20)}</button></div>`}
-function chatSeg(v){st.chatSeg=v;render()}
+function chatSeg(v){st.chatSeg=v;render();if(v==='team'){const m=$('main');if(m)setTimeout(()=>m.scrollTop=m.scrollHeight,0)}}
 function dmWith(id){return st.dms.filter(m=>(m.sender_id===id&&m.recipient_id===st.me.id)||(m.sender_id===st.me.id&&m.recipient_id===id))}
 function dmThread(id){if(!id)return emptyBox('Тренер ще не підключений');const th=dmWith(id);
  return `<div class="s8" style="display:flex;flex-direction:column">${th.length?th.map(m=>msgBubble(m,false)).join(''):emptyBox('Напишіть '+esc(nameOf(id).split(' ')[0]),'Особисте повідомлення бачите лише ви двоє')}</div>

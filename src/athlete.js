@@ -32,9 +32,10 @@ function todayView(){
  const pid=st.me.id,p=me();const {days,note}=weekPlan(pid,0);const d=days[TODAY];const tIso=dayIso(0,TODAY);
  let h=`<div class="stack"><div><div class="over">${DAYS_FULL[TODAY]}, ${fmtDate(dayDate(0,TODAY))}</div><div class="t28" style="margin-top:4px">Привіт, ${esc(p.short)}</div></div>${pendingBanner()}${todayBoardCards()}${st.me.status==='active'?todayRides():''}`;
  const wl=st.well[tIso];
- if(!wl){const q=WQ[st.wellStep];h+=`<div class="card"><div class="between"><div class="over">Самопочуття · ${st.wellStep+1}/3</div></div><div class="q" style="margin-top:8px">${q[0]}</div>
+ if(wl&&st.ready&&st.ready.day===tIso)h+=readyCard();
+ if(!wl){const q=st.wellStep<3?WQ[st.wellStep]:WQ4;h+=`<div class="card"><div class="between"><div class="over">Самопочуття · ${st.wellStep+1}/4</div><span class="t12 ter">план підлаштується</span></div><div class="q" style="margin-top:8px">${q[0]}</div>
   <div class="wl">${q[1].map((o,k)=>`<button onclick="wellAns(${k})">${o}</button>`).join('')}</div></div>`}
- if(note&&note.k==='well')h+=`<div class="note warn">${ic('info',20)}<span>${note.t}</span></div>`;
+ if(note&&note.k==='well'&&!(st.ready&&st.ready.day===tIso))h+=`<div class="note warn">${ic('info',20)}<span>${note.t}</span></div>`;
  if(d.rest)h+=`<div class="card"><div class="row12"><span class="ico a">${ic('moon',20)}</span><div><div class="t16">День відпочинку</div><div class="t14 sec">Сон, вода і легка прогулянка</div></div></div></div>`;
  else{
   const done=isDone(pid,0,TODAY),sk=isSkip(pid,0,TODAY);
@@ -53,10 +54,10 @@ function todayView(){
  ${li({left:`<span class="ico">${ic('upload',20)}</span>`,t:'Завантажити файл тренування',s:'.fit, .gpx або .tcx з годинника чи компʼютера',on:"pickActivityFile()"})}
  ${li({left:`<span class="ico">${ic('plus',20)}</span>`,t:'Додати тренування поза планом',s:'Запишіть те, чого не було в плані',on:"openExtraLog()"})}</div>`;
  return h+'</div>'}
-async function wellAns(k){st.wellAns.push(k);if(st.wellStep<2){st.wellStep++;render();return}
- const a=st.wellAns;st.wellStep=0;st.wellAns=[];const row={athlete_id:st.me.id,day:dayIso(0,TODAY),sleep:a[0],energy:a[1],legs:a[2]};
+async function wellAns(k){st.wellAns.push(k);if(st.wellStep<3){st.wellStep++;render();return}
+ const a=st.wellAns;st.wellStep=0;st.wellAns=[];const row={athlete_id:st.me.id,day:dayIso(0,TODAY),sleep:a[0],energy:a[1],legs:a[2],pain:a[3]};
  try{D(await sb.from('wellness').upsert(row,{onConflict:'athlete_id,day'}));st.well[row.day]=row;
-  if(wellBad(row)>=2)toast('План полегшено. Тренер отримав сповіщення','info');else toast('Дякую! Самопочуття збережено')}catch(e){fail(e)}render()}
+  const c=await saveReadiness(row);toast(c.level==='good'?'Готовність '+c.score+'%. Тренуємось за планом':'Готовність '+c.score+'%. План підлаштовано, тренер отримав сповіщення',c.level==='good'?'check':'info')}catch(e){fail(e)}render()}
 
 /* ---------- LOGGING ---------- */
 function avgPower(w){let t=0,e=0;w.segs.forEach(s=>{if(s.t==='i'){t+=s.n*(s.on+s.off);e+=s.n*(s.on*s.onP+s.off*s.offP)}else if(s.t==='s'){t+=s.d;e+=s.d*s.p}else{t+=s.d;e+=s.d*(s.lo+s.hi)/2}});return t?e/t:0.7}
@@ -100,6 +101,8 @@ async function saveLog(btn){const L=st._log;if($('#lnote'))L.note=$('#lnote').va
   const saved=D(await sb.from('workout_logs').insert(row).select().single());st.logs.push(saved);
   st.logs=st.logs.filter(l=>!(l.day===row.day&&l.status==='skipped'&&!L.extra&&!L.file));
   if(!L.extra&&!L.file)await sb.from('workout_logs').delete().eq('athlete_id',st.me.id).eq('day',row.day).eq('status','skipped');
+  const dup=st.posts.find(p=>p.author_id===st.me.id&&p.board_post_id&&p.sport===row.sport&&iso(new Date(p.created_at))===row.day);
+  if(dup&&L.share){L.share=false;toast('Це тренування вже є у стрічці з дошки секції','info')}
   if(L.share&&st.me.status==='active'){let photo_path=null;if(L.photo){photo_path=st.me.id+'/'+Date.now()+'.jpg';D(await sb.storage.from('photos').upload(photo_path,L.photo,{contentType:L.photo.type||'image/jpeg'}))}
    const stats=st.me.hide?[]:postStats(row);const post=D(await sb.from('posts').insert({kind:'workout',sport:row.sport,title:row.title,body:row.note,stats,photo_path}).select('*, post_likes(user_id), post_comments(id,author_id,body,created_at)').single());
    st.posts.unshift(post);if(photo_path)signPhotos()}
@@ -142,7 +145,12 @@ SHEETS.wk=a=>{
 /* ---------- PLAN ---------- */
 function unlocked(){return st.unlock&&new Date(st.unlock.until)>new Date()}
 function canEditPlan(wk){const r=st.plans[st.me.id+'|'+wkIso(wk)];return unlocked()||!(r&&r.coach_locked)}
+function planSegSet(v){st.planSeg=v;render._k='';render()}
 function planView(){
+ const ps=seg([['plan','Тренування'],['food','Їжа']],st.planSeg==='food'?'food':'plan','planSegSet');
+ if(st.planSeg==='food')return `<div class="stack">${ps}${foodView()}</div>`;
+ return planViewInner().replace('<div class="stack">','<div class="stack">'+ps)}
+function planViewInner(){
  const pid=st.me.id,p=me(),wk=st.wk;const {days,note,locked}=weekPlan(pid,wk);
  const tr=days.filter(d=>!d.rest);const mins=tr.reduce((a,d)=>a+dayMin(d),0);
  let h=`<div class="stack">${pendingBanner()}<div class="row"><button class="ib" onclick="setWk(${wk-1})" aria-label="Попередній тиждень" ${wk<=-12?'disabled':''}>${ic('back',22)}</button><div class="grow">${seg([['0','Цей тиждень'],['1','Наступний']],String(wk),'setWk')}</div></div>`;
@@ -157,7 +165,8 @@ function planView(){
  h+=`<div class="list">${days.map(d=>{const dt=dayDate(wk,d.i);const it=d.items[0];const w=it&&itemW(it);const done=isDone(pid,wk,d.i),sk=isSkip(pid,wk,d.i);
   const right=done?`<span class="c-ok">${ic('check',20)}</span>`:sk?tag('пропуск','warn'):(unl?`<span class="acc">${ic('edit',18)}</span>`:(d.rest?'':`<span class="chev">${ic('chev',20)}</span>`));
   const title=d.rest?'Відпочинок':esc(itemName(it));
-  const sub=d.rest?'':d.items.map(x=>SPORT[x.sport].n).join(' + ')+' · '+fmtMin(dayMin(d))+(d.adapted?' · полегшено':'');
+  const altL=logsOn(dayIso(wk,d.i),pid).find(l=>l.source==='board'&&l.board_post_id);
+  const sub=(d.rest?'':d.items.map(x=>SPORT[x.sport].n).join(' + ')+' · '+fmtMin(dayMin(d))+(d.adapted?' · '+({light:'полегшено',recovery:'відновлення',rest:'відпочинок за самопочуттям'}[d.adapted]||'полегшено'):''))+(altL?(d.rest?'':' · ')+'🔁 зроблено інакше'+(altL.tss?' · '+altL.tss+' балів':''):'');
   const on=unl?`openSheet('editDay',{pid:'${pid}',wk:${wk},i:${d.i}})`:(w?`openSheet('wk',{pid:'${pid}',wk:${wk},i:${d.i},j:0})`:'');
   return `<button class="li ${d.rest?'dim':''} ${wk===0&&d.i===TODAY?'today-mark':''}" onclick="${on}"><div class="dayc"><b>${DAYS[d.i]}</b><span>${dt.getDate()}</span></div><div class="grow"><div class="t16 ell">${title}</div>${sub?`<div class="t12 sec ell">${sub}</div>`:''}</div>${right}</button>`}).join('')}</div>`;
  const pend=st.requests.find(r=>r.status==='pending');

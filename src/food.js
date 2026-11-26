@@ -3,8 +3,10 @@ function bmr(p){return Math.round(10*p.weight+6.25*p.height-5*p.age+(p.sex==='f'
 function trainKcal(){const d=weekPlan(st.me.id,0).days[TODAY];const done=st.logs.filter(l=>l.day===dayIso(0,TODAY)&&l.status==='done');
  if(done.length)return done.reduce((a,l)=>a+(l.kcal||Math.round((l.duration_min||0)*7)),0);
  return d.items.reduce((a,it)=>{const w=itemW(it);return a+(w?Math.round(wKcal(w,me())*it.min/w.dur):Math.round(it.min*7))},0)}
-function norms(){const p=me();const base=Math.round(bmr(p)*1.35);const tr=trainKcal();const def=p.goals.includes('weight')?500:0;const total=base+tr-def;
- const prot=Math.round(p.weight*1.8),fat=Math.round(p.weight*.9),carb=Math.max(0,Math.round((total-prot*4-fat*9)/4));return {base,tr,def,total,prot,fat,carb}}
+function nutrOf(p){const n=p.nutr||{};const goal=n.goal||(p.goals.includes('weight')?'cut':'keep');return {act:n.act||1.35,goal,delta:n.delta!=null?n.delta:(goal==='keep'?0:goal==='gain'?300:500),protKg:n.protKg||1.8,fatKg:n.fatKg||.9,kcal:n.kcal||null}}
+function normsFor(p,tr){const N=nutrOf(p);const b=bmr(p);const base=Math.round(b*N.act);const d=N.goal==='keep'?0:Math.round(N.delta||0);const def=N.goal==='cut'?d:N.goal==='gain'?-d:0;const auto=Math.max(1200,base+tr-def);const total=N.kcal?Math.round(N.kcal):auto;
+ const prot=Math.round(p.weight*N.protKg),fat=Math.round(p.weight*N.fatKg),carb=Math.max(0,Math.round((total-prot*4-fat*9)/4));return {bmr:b,base,tr,def,auto,total,prot,fat,carb,N}}
+function norms(){return normsFor(me(),trainKcal())}
 function todayFood(){return st.food.filter(f=>f.day===dayIso(0,TODAY))}
 function eaten(list){return (list||todayFood()).reduce((a,f)=>({kcal:a.kcal+f.kcal,p:a.p+ +f.p,f:a.f+ +f.f,c:a.c+ +f.c,alc:a.alc+(+f.alc||0)}),{kcal:0,p:0,f:0,c:0,alc:0})}
 function ring(p,label,sub){const r=48,c=2*Math.PI*r;const v=Math.max(0,Math.min(1,p));return `<div class="ring"><svg width="112" height="112" viewBox="0 0 112 112"><circle cx="56" cy="56" r="${r}" fill="none" stroke="var(--s3)" stroke-width="10"/><circle cx="56" cy="56" r="${r}" fill="none" stroke="var(--acc)" stroke-width="10" stroke-linecap="round" stroke-dasharray="${(c*v).toFixed(1)} ${c.toFixed(1)}" transform="rotate(-90 56 56)"/></svg><div class="in"><div class="t20 num">${label}</div><div class="t12 ter">${sub}</div></div></div>`}
@@ -75,10 +77,47 @@ SHEETS.foodEdit=id=>{const f=st.food.find(x=>x.id===id);if(!f)return {title:'',b
  foot:`<button class="btn p" onclick="saveFoodEdit(this,${id})">Зберегти</button>`}};
 async function saveFoodEdit(btn,id){await busy(btn,async()=>{const f=st.food.find(x=>x.id===id);const per=f.per||{kcal:f.kcal/f.amount*100,p:f.p/f.amount*100,f:f.f/f.amount*100,c:f.c/f.amount*100,alc:f.alc/f.amount*100};const g=st._fe.g,k=g/100;
  const upd={amount:g,kcal:Math.round(per.kcal*k),p:+(per.p*k).toFixed(1),f:+(per.f*k).toFixed(1),c:+(per.c*k).toFixed(1),alc:+((per.alc||0)*k).toFixed(1)};D(await sb.from('food_entries').update(upd).eq('id',id));Object.assign(f,upd);closeAll();render();toast('Кількість оновлено')})}
-SHEETS.norm=()=>{const n=norms(),p=me();return {title:'Ваша норма',body:`<div class="stack"><div class="list">
- ${[['Базовий обмін (Міффлін)',bmr(p)],['Побутова активність ×1,35',n.base],['Тренування сьогодні','+'+n.tr],['Дефіцит для схуднення',n.def?'−'+n.def:'0']].map(x=>`<div class="li" style="min-height:48px"><div class="grow t14 sec">${x[0]}</div><div class="t14 num">${x[1]}</div></div>`).join('')}
- <div class="li" style="min-height:48px"><div class="grow t16">Норма на сьогодні</div><div class="t16 num acc">${fmtNum(n.total)} ккал</div></div></div>
- <div class="t12 ter">Рахуємо з профілю: ${p.age} років, ${p.height} см, ${String(p.weight).replace('.',',')} кг. Білок ${n.prot} г (1,8 г/кг), жири ${n.fat} г, решта вуглеводи.</div></div>`}};
+const ACT_L=[[1.2,'Сидяча робота, мало руху'],[1.375,'Трохи руху: прогулянки, побут'],[1.55,'Помірно: на ногах пів дня'],[1.725,'Активно: фізична робота'],[1.9,'Дуже активно: важка фізична праця']];
+function actLabel(a){return ACT_L.reduce((b,x)=>Math.abs(x[0]-a)<Math.abs(b[0]-a)?x:b)[1]}
+const GOAL_L={cut:'Схуднення',keep:'Підтримка ваги',gain:'Набір маси'};
+const dec=(x,d)=>String((+x).toFixed(d==null?2:d)).replace(/\.?0+$/,'').replace('.',',');
+function normRows(n,p){return `<div class="list">${[['Базовий обмін (Міффлін)',fmtNum(n.bmr)],['Побутова активність ×'+dec(n.N.act),fmtNum(n.base)],['Тренування сьогодні','+'+n.tr],[n.N.goal==='gain'?'Профіцит для набору':'Дефіцит для схуднення',n.def>0?'−'+n.def:n.def<0?'+'+(-n.def):'0']].map(x=>`<div class="li" style="min-height:48px"><div class="grow t14 sec">${x[0]}</div><div class="t14 num">${x[1]}</div></div>`).join('')}
+ ${n.N.kcal?`<div class="li" style="min-height:48px"><div class="grow t14 sec">Розрахунок (замінено вручну)</div><div class="t14 num ter"><s>${fmtNum(n.auto)}</s></div></div>`:''}
+ <div class="li" style="min-height:48px"><div class="grow t16">Норма на сьогодні${n.N.kcal?' · вручну':''}</div><div class="t16 num acc">${fmtNum(n.total)} ккал</div></div></div>
+ <div class="t12 ter">${p.age} р., ${p.height} см, ${dec(p.weight,1)} кг · ${GOAL_L[n.N.goal]}. Білок ${n.prot} г (${dec(n.N.protKg,1)} г/кг), жири ${n.fat} г (${dec(n.N.fatKg,1)} г/кг), вуглеводи ${n.carb} г.</div>`}
+SHEETS.norm=()=>{const n=norms(),p=me();return {title:'Ваша норма',body:`<div class="stack">${normRows(n,p)}</div>`,foot:`<button class="btn p" onclick="normEditOpen()">${ic('edit',20)} Змінити</button>`}};
+function normEditOpen(){const p=me();st._ne={weight:p.weight,height:p.height,age:p.age,sex:p.sex,...nutrOf(p)};openSheet('normEdit')}
+function neP(){const e=st._ne,p=me();return Object.assign({},p,{weight:+e.weight||p.weight,height:+e.height||p.height,age:+e.age||p.age,sex:e.sex,nutr:{act:e.act,goal:e.goal,delta:e.delta,protKg:e.protKg,fatKg:e.fatKg,kcal:e.kcal||null}})}
+function neUpdate(){const el=$('#neprev');if(el){const q=neP();el.innerHTML=normRows(normsFor(q,trainKcal()),q)}}
+function neSet(k,v,re){st._ne[k]=v;if(re){renderSheet()}else neUpdate()}
+SHEETS.normEdit=()=>{const e=st._ne;if(!e)return {title:'',body:''};const u=v=>{neUpdate()};
+ return {title:'Змінити норму',full:true,body:`<div class="stack">
+ <div class="over">Про вас</div>
+ ${nf({id:'ne-w',label:'Вага',val:e.weight,min:25,max:200,step:.1,unit:'кг',plus:true,set:v=>{e.weight=v;u()}})}
+ ${nf({id:'ne-h',label:'Зріст',val:e.height,min:100,max:230,step:1,unit:'см',set:v=>{e.height=v;u()}})}
+ ${nf({id:'ne-a',label:'Вік',val:e.age,min:10,max:90,step:1,unit:'р.',set:v=>{e.age=v;u()}})}
+ <div class="field"><label>Стать</label>${seg([['m','Чоловік'],['f','Жінка']],e.sex,"(v=>neSet('sex',v,true))")}</div>
+ <div class="over">Активність поза тренуваннями</div>
+ <div class="list">${ACT_L.map(x=>`<button class="li" style="min-height:52px" onclick="neSet('act',${x[0]},true)"><div class="grow"><div class="t14 w6">${x[1]}</div><div class="t12 ter">×${dec(x[0],3)}</div></div>${Math.abs(e.act-x[0])<.01?`<span class="acc">${ic('check',20)}</span>`:''}</button>`).join('')}</div>
+ ${nf({id:'ne-act',label:'Точний коефіцієнт',val:e.act,min:1.2,max:1.9,step:.025,unit:'×',set:v=>{e.act=v;u()}})}
+ <div class="t12 ter">Тренування додаються окремо щодня, тому тут враховуйте лише роботу і побут.</div>
+ <div class="over">Мета</div>
+ ${seg([['cut','Схуднення'],['keep','Підтримка'],['gain','Набір']],e.goal,"(v=>{st._ne.delta=v==='keep'?0:(st._ne.delta||(v==='gain'?300:500));neSet('goal',v,true)})")}
+ ${e.goal==='keep'?'':nf({id:'ne-d',label:e.goal==='gain'?'Профіцит на день':'Дефіцит на день',val:e.delta,min:100,max:1000,step:50,unit:'ккал',plus:true,set:v=>{e.delta=v;u()}})}
+ ${e.goal==='cut'&&e.delta>750?`<div class="note warn">${ic('alert',20)}<span>Великий дефіцит під час тренувань знижує потужність і відновлення. Безпечно: 300–600 ккал.</span></div>`:''}
+ <div class="over">Макроси</div>
+ ${nf({id:'ne-p',label:'Білок',val:e.protKg,min:1,max:3,step:.1,unit:'г/кг',set:v=>{e.protKg=v;u()}})}
+ ${nf({id:'ne-f',label:'Жири',val:e.fatKg,min:.5,max:2,step:.1,unit:'г/кг',set:v=>{e.fatKg=v;u()}})}
+ <div class="over">Своя норма (необовʼязково)</div>
+ ${nf({id:'ne-k',label:'Загальна норма ккал вручну',val:e.kcal||'',min:1200,max:6000,step:50,unit:'ккал',empty:true,ph:'рахувати автоматично',set:v=>{e.kcal=v===''?null:v;u()}})}
+ <div class="t12 ter">Якщо заповнити, ця цифра замінить розрахунок. Залиште порожнім, щоб рахувати автоматично.</div>
+ <div class="over">Результат</div><div id="neprev">${normRows(normsFor(neP(),trainKcal()),neP())}</div>
+ </div>`,foot:`<button class="btn p" onclick="normSave(this)">Зберегти</button>`}};
+async function normSave(btn){const e=st._ne;await busy(btn,async()=>{const p=me();const oldW=p.weight;p.weight=Math.round((+e.weight||p.weight)*10)/10;p.height=Math.round(+e.height||p.height);p.age=Math.round(+e.age||p.age);p.sex=e.sex;
+ p.nutr={act:Math.round(e.act*1000)/1000,goal:e.goal,delta:e.goal==='keep'?0:Math.round(e.delta||0),protKg:Math.round(e.protKg*10)/10,fatKg:Math.round(e.fatKg*10)/10,kcal:e.kcal?Math.round(e.kcal):null};
+ await saveMe();
+ if(p.weight!==oldW){const row={athlete_id:p.id,day:dayIso(0,TODAY),kg:p.weight};const r=await sb.from('weights').upsert(row,{onConflict:'athlete_id,day'});if(!r.error)st.weights=st.weights.filter(w=>w.day!==row.day).concat([row]).sort((a,b)=>a.day<b.day?-1:1)}
+ st._ne=null;closeSheet();render();renderSheet();toast('Норму оновлено: '+fmtNum(norms().total)+' ккал')})}
 function foodWeek(){const p=me(),n=norms();const kc=[],labels=[];
  for(let i=0;i<7;i++){const day=dayIso(0,i);kc.push(st.food.filter(f=>f.day===day).reduce((a,f)=>a+f.kcal,0));labels.push(DAYS[i])}
  const logged=kc.slice(0,TODAY+1).filter(x=>x>0);const avg=logged.length?Math.round(logged.reduce((a,b)=>a+b)/logged.length):0;

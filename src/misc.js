@@ -14,7 +14,7 @@ SHEETS.profile=()=>{const p=me();const coach=isCoach();
   ['download','Експорт даних','JSON з усіма вашими даними','pexport'],
   ['lock','Змінити пароль','','password']];
  const inst=instMenuRow();if(inst)rows.push(inst);
- return {title:'Профіль',full:true,body:`<div class="stack"><div class="row12"><span class="av lg ${st.coach?'me':''}">${esc(p.ini)}</span><div class="grow"><div class="t20">${esc(p.name)}</div><div class="t14 sec">${st.coach?'Головний тренер · TRITON':esc(p.group)+(p.city?' · '+esc(p.city):'')}</div><div class="t12 ter">${esc(st.user.email||'')}</div></div></div>
+ return {title:'Профіль',full:true,body:`<div class="stack"><div class="row12"><button class="avbtn" onclick="openSheet('avMenu','${st.me.id}')" aria-label="Змінити фото"><span class="av lg ${st.coach?'me':''}">${avIn(st.me.id,p.ini)}</span><span class="avcam">${ic('edit',14)}</span></button><div class="grow"><div class="t20">${esc(p.name)}</div><div class="t14 sec">${st.coach?'Головний тренер · TRITON':esc(p.group)+(p.city?' · '+esc(p.city):'')}</div><div class="t12 ter">${esc(st.user.email||'')}</div></div></div>
  ${sw?`<div class="list">${sw}</div>`:''}
  <div class="list">${rows.map(r=>li({left:`<span class="ico">${ic(r[0],20)}</span>`,t:r[1],s:r[2],on:r[4]||(r[3]==='pexport'?'exportData(this)':r[3]==='inst'?'instInstall(this)':`openSheet('${r[3]}')`)})).join('')}</div>
  <button class="btn d" onclick="logout()">${ic('logout',20)} Вийти</button><div class="t12 ter center">TRITON Team · версія ${APP_VERSION}</div></div>`}};
@@ -213,7 +213,7 @@ window.__errs=[];window.addEventListener('error',e=>window.__errs.push(String(e.
 if(typeof parseInviteHash==="function")parseInviteHash();
 
 /* tap on a notification → go where it points */
-function notifGo(id){const n=st.notifs.find(x=>x.id===id);if(!n)return;closeSheet();const t=(n.title||'')+' '+(n.body||'');
+function notifGo(id){const n=st.notifs.find(x=>x.id===id);if(!n)return;if(typeof notifLink==='function'&&notifLink(n))return;closeAll();const t=(n.title||'')+' '+(n.body||'');
  const secByName=()=>{const k=Object.keys(SEC_DEF).find(k=>t.includes(SEC_DEF[k].name));return k};
  const dmFrom=()=>{const m=/від\s+(.+)$/.exec(n.title||'');if(!m)return null;const nm=m[1].trim();const all=(st.members||[]).concat(st.athletes||[]);const x=all.find(a=>(a.full_name||a.name||'')===nm)||all.find(a=>nameOf(a.id)===nm);return x?x.id:null};
  const k=n.kind;
@@ -223,7 +223,7 @@ function notifGo(id){const n=st.notifs.find(x=>x.id===id);if(!n)return;closeShee
   if(k==='announce'){go('events');return}
   if(k==='board'||k==='board_mark'||k==='points'){const sc=secByName();if(sc)st.sec=sc;go('sec');return}
   go('team');return}
- if(k==='dm'){const u=dmFrom();if(u){setTimeout(()=>openSheet('dm',u),60);return}st.teamSeg='chat';st.chatSeg='coach';go('team');return}
+ if(k==='dm'){st.chatSeg='dm';go('chat');const u=dmFrom();if(u)setTimeout(()=>openSheet('dm',u),60);return}
  if(k==='announce'){if(/заїзд/i.test(t)){st.teamSeg='events';go('team');return}st.teamSeg='feed';go('team');return}
  if(k==='comment'||k==='join'){st.teamSeg='feed';go('team');return}
  if(k==='award'){go('prog');setTimeout(()=>openSheet('ach'),60);return}
