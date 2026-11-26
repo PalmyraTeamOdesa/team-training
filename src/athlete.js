@@ -1,13 +1,13 @@
 /* ---------- WORKOUT HELPERS ---------- */
 const pct=x=>Math.round(x*100)+'%';
 function wattsTxt(p,ftp){return ftp?Math.round(p*ftp)+' Вт':pct(p)}
-function segText(s,w,ftp){
- const bike=w.sport==='bike';const W=x=>bike?wattsTxt(x,ftp):intTxt(x,w.sport);
- if(s.t==='w')return ['Розминка',fmtMin(s.d/60),bike?W(s.lo)+' → '+W(s.hi):'легко'];
- if(s.t==='c')return ['Заминка',fmtMin(s.d/60),bike?W(s.lo)+' → '+W(s.hi):'легко'];
- if(s.t==='s')return [zoneName(s.p,w.sport),fmtMin(s.d/60),W(s.p)];
+function segText(s,w,ftp,prof){
+ const bike=w.sport==='bike';const W=x=>bike?wattsTxt(x,ftp):intTxt(x,w.sport);const hrOk=prof&&(w.sport==='bike'||w.sport==='run');
+ if(s.t==='w')return ['Розминка',fmtMin(s.d/60),bike?W(s.lo)+' → '+W(s.hi):'легко',hrOk?hrUpTo(s.hi,prof):''];
+ if(s.t==='c')return ['Заминка',fmtMin(s.d/60),bike?W(s.lo)+' → '+W(s.hi):'легко',hrOk?hrUpTo(s.lo,prof):''];
+ if(s.t==='s')return [zoneName(s.p,w.sport),fmtMin(s.d/60),W(s.p),hrOk?hrFor(s.p,prof):''];
  const dd=x=>x<60?x+' с':(x%60?Math.floor(x/60)+' хв '+x%60+' с':x/60+' хв');
- return [s.n+' × ('+dd(s.on)+' / '+dd(s.off)+')',fmtMin(s.n*(s.on+s.off)/60),W(s.onP)+' / '+W(s.offP)];
+ return [s.n+' × ('+dd(s.on)+' / '+dd(s.off)+')',fmtMin(s.n*(s.on+s.off)/60),W(s.onP)+' / '+W(s.offP),hrOk?hrFor(s.onP,prof):''];
 }
 function zoneName(p,sp){if(sp==='gym')return p<.5?'Розтяжка':'Робочі підходи';return p<.56?'Відновлення':p<.76?'Витривалість':p<.9?'Темп':p<1.05?'Поріг':p<1.2?'VO2max':'Анаеробна'}
 function intTxt(p,sp){if(sp==='gym')return p>.7?'RPE 8':'RPE 6';return zoneName(p,sp).toLowerCase()}
@@ -127,13 +127,13 @@ SHEETS.wk=a=>{
  if(inPlan){const d=weekPlan(a.pid,a.wk).days[a.i];it=d.items[a.j||0];w=itemW(it)}else w=libById(a.id);
  const p=inPlan&&a.pid!==st.me.id?athleteP(a.pid):me();const ftp=p&&p.form.ftp;
  if(!w)return {title:esc(itemName(it)),body:emptyBox(SPORT[it.sport].n,fmtMin(it.min))};
- const segs=w.segs.map(s=>segText(s,w,ftp));
+ const segs=w.segs.map(s=>segText(s,w,ftp,p));
  const done=inPlan&&isDone(a.pid,a.wk,a.i);const mine=inPlan&&a.pid===st.me.id&&!isCoach();
  let body=`<div class="stack"><div class="row" style="flex-wrap:wrap">${tag(SPORT[w.sport].n,'a')}${tag(catName(w.sport,w.cat))}${tag(LEVEL[w.level])}</div>
  <div class="grid3"><div class="tile"><div class="v">${w.dur}</div><div class="l">хвилин</div></div><div class="tile"><div class="v">${wTSS(w)}</div><div class="l">TSS</div></div><div class="tile"><div class="v">${wKcal(w,p)}</div><div class="l">ккал</div></div></div>
  <div>${wChart(w,80)}<div class="t12 ter" style="margin-top:8px">Пунктир: ${ftp&&w.sport==='bike'?'ваш FTP '+ftp+' Вт':'поріг (100%)'}</div></div>
  <div class="s8"><div class="over">Мета</div><div class="t14">${esc(w.goal)}</div></div>
- <div class="s8"><div class="over">Структура</div><div class="list">${segs.map(s=>`<div class="li" style="min-height:48px"><div class="grow"><div class="t14 w6">${s[0]}</div><div class="t12 sec">${s[1]}</div></div><div class="t14 num sec">${s[2]}</div></div>`).join('')}</div></div>
+ <div class="s8"><div class="over">Структура</div><div class="list">${segs.map(s=>`<div class="li" style="min-height:48px"><div class="grow"><div class="t14 w6">${s[0]}</div><div class="t12 sec">${s[1]}</div></div><div style="text-align:right"><div class="t14 num sec">${s[2]}</div>${s[3]?`<div class="t12 ter num">${s[3]}</div>`:''}</div></div>`).join('')}</div>${(w.sport==='bike'||w.sport==='run')?`<button class="btn t sm" style="margin-top:8px;width:auto" onclick="zonesOpen(${a.pid&&a.pid!==st.me.id?`'${a.pid}'`:''})">${hrModel(p.form,p.age).est?'Пульс оцінено з віку. Уточнити зони':'Мої зони'} ›</button>`:''}</div>
  ${w.sport==='bike'?`<div class="note">${ic('info',20)}<span>На звичайному станку тримайте вати передачею і каденсом 85–95 об/хв.</span></div>`:''}</div>`;
  let foot='';
  const zwo=w.sport==='bike'?`<button class="btn s" style="width:auto;flex-shrink:0" onclick="downloadZwo('${w.id}')">${ic('download',20)} .zwo</button>`:'';

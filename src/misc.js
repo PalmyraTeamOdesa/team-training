@@ -5,7 +5,7 @@ SHEETS.profile=()=>{const p=me();const coach=isCoach();
   ['trophy','Нагороди й бали',rewardsSummary(),'myrewards','openRewards()'],
   ['user','Мої дані',`${p.age} р. · ${p.height} см · ${String(p.weight).replace('.',',')} кг`,'pdata'],
   ['target','Цілі',p.goals.map(g=>GOALS[g]).join(', ')||'—','pgoals'],
-  ['gauge','Зони',p.form.ftp?'Розраховано з FTP '+p.form.ftp+' Вт':'Після тесту FTP','zones'],
+  ['gauge','Зони',zonesSub(p),'zones','zonesOpen()'],
   ['gym','Інвентар',p.equip.length+' позицій','pequip'],
   ['clock','Мій час і можливості','Дні, години, вид активності','schedule'],
   ['bell','Нагадування','Тренування о '+p.remind,'premind'],
@@ -41,9 +41,6 @@ SHEETS.pgoals=()=>{const p=me();return {title:'Цілі',body:`<div class="stack
  <div class="note">${ic('info',20)}<span>Зміна цілей перебудує план з наступного тижня.</span></div></div>`,foot:`<button class="btn p" onclick="saveGoals(this)">Зберегти</button>`}};
 async function saveGoals(btn){await busy(btn,async()=>{if(!me().goals.length)me().goals=['endur'];await saveMe();if(canEditPlan(1)){const g=genFor(st.me,1,1);try{await savePlan(st.me.id,1,g.days,{scale:g.scale,note:g.note})}catch(e){}}closeSheet();render();toast('Цілі оновлено')})}
 function tgArr(arr,v){const i=arr.indexOf(v);if(i>=0)arr.splice(i,1);else arr.push(v);renderSheet()}
-SHEETS.zones=()=>{const p=me();const f=p.form.ftp,hm=p.form.hrMax||(220-p.age);const Z=[['Z1 Відновлення',0,.55,0,.68],['Z2 Витривалість',.56,.75,.69,.83],['Z3 Темп',.76,.9,.84,.94],['Z4 Поріг',.91,1.05,.95,1.05],['Z5 VO2max',1.06,1.2,null,null],['Z6 Анаеробна',1.21,null,null,null]];
- return {title:'Зони',body:`<div class="stack"><div class="t14 sec">Автоматично з FTP ${f||'—'} Вт і макс. пульсу ${hm}${p.form.hrMax?'':' (оцінка 220 − вік)'}. Оновіть FTP у «Мої дані» після тесту.</div>
- <div class="list">${Z.map(z=>`<div class="li"><span class="sd" style="width:12px;height:12px;border-radius:4px;background:${zoneCol((z[1]+(z[2]||1.4))/2)}"></span><div class="grow"><div class="t14 w6">${z[0]}</div><div class="t12 sec">${z[3]!=null?'Пульс '+Math.round(z[3]*hm*.93)+'–'+Math.round(z[4]*hm*.93):'Пульс не показовий'}</div></div><div class="t14 num">${f?(z[2]?Math.round(z[1]*f)+'–'+Math.round(z[2]*f):'>'+Math.round(z[1]*f))+' Вт':''}</div></div>`).join('')}</div></div>`}};
 SHEETS.pequip=()=>{const p=me();return {title:'Інвентар',body:`<div class="chips">${Object.keys(EQUIP).map(e=>`<button class="chip ${p.equip.includes(e)?'on':''}" onclick="tgArr(me().equip,'${e}')">${EQUIP[e]}</button>`).join('')}</div>`,foot:`<button class="btn p" onclick="busy(this,async()=>{await saveMe();closeSheet();toast('Збережено')})">Зберегти</button>`}};
 SHEETS.premind=()=>{const p=me();const R=p.remindOn;return {title:'Нагадування',body:`<div class="stack">${nf({id:'p-rem',label:'Час ранкового нагадування',val:(()=>{const t=(p.remind||'07:00').split(':');return +t[0]*60+(+t[1]||0)})(),min:5*60,max:22*60,step:15,kind:'clock',set:v=>p.remind=nfFmtClock(v)})}
  <div class="list">${[['morning','Ранкове самопочуття','Щодня в обраний час'],['workout','Тренування дня','Якщо ще не відмічено'],['water','Вода і білок','Двічі на день'],['weekly','Планування тижня','Неділя ввечері']].map(r=>`<button class="li" onclick="me().remindOn.${r[0]}=!me().remindOn.${r[0]};renderSheet()"><div class="grow"><div class="t16">${r[1]}</div><div class="t12 sec">${r[2]}</div></div><span class="tg ${R[r[0]]?'on':''}"></span></button>`).join('')}</div>
