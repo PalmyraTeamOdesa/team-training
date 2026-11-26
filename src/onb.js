@@ -6,7 +6,7 @@ function newOb(){const m=st.me||{};return {step:1,name:m.name&&m.name!=='Без 
  days:days([null,null,null,null,null,null,null]),
  equip:[],form:{ftp:'',ftpU:true,hrRest:'',hrRestU:true,hrMax:'',hrMaxU:true,run5k:'',run5kU:true,swim1500:'',swim1500U:true},
  health:{inj:[],bp:'norm',notes:''},remind:'07:00',consent:false}}
-function startOnb(){st.ob=newOb();st.screen='onb';render()}
+function startOnb(){st.ob=newOb();st.screen='onb';render();if(typeof navWrite==='function')navWrite(true)}
 function obView(){return onbView()}
 function onbView(){const o=st.ob;
  if(o.step===9)return obReady();
@@ -16,8 +16,8 @@ function onbView(){const o=st.ob;
  ${[ob1,ob2,ob3,ob4,ob5,ob6,ob7,ob8][n-1]()}</div></main>
  <div class="sh-foot">${opt?`<button class="btn s" style="width:auto" onclick="obNext()">Пропустити</button>`:''}<button class="btn p" ${obValid()?'':'disabled'} onclick="obNext()">${n===8?'Створити план':'Далі'}</button></div>`}
 function obValid(){const o=st.ob;if(o.step===1)return o.name.trim()&&+o.age>4&&+o.weight>20;if(o.step===2)return Object.values(o.sports).some(s=>s.on);if(o.step===3)return o.goals.length>0;if(o.step===4)return o.days.some(d=>d.acts.length);if(o.step===8)return o.consent;return true}
-function obNext(){const o=st.ob;o.step++;const m=$('main');if(m)m.scrollTop=0;render._k='';render()}
-function obBack(){const o=st.ob;if(o.step===1){if(confirm('Вийти з акаунта?'))logout();return}o.step--;render._k='';render()}
+function obNext(){const o=st.ob;o.step++;const m=$('main');if(m)m.scrollTop=0;render._k='';render();if(typeof navWrite==='function')navWrite(false)}
+function obBack(){const o=st.ob;if(o.step===1){if(confirm('Вийти з акаунта?'))logout();return}if(history.state&&history.state.triton){history.back();return}o.step--;render._k='';render()}
 function obSet(path,v){const ks=path.split('.');let t=st.ob;for(let k=0;k<ks.length-1;k++)t=t[ks[k]];t[ks[ks.length-1]]=v}
 function obIn(path,v){obSet(path,v);const b=document.querySelector('.sh-foot .btn.p');if(b)b.disabled=!obValid()}
 function obToggleArr(path,v){const ks=path.split('.');let t=st.ob;for(const k of ks)t=t[k];const i=t.indexOf(v);if(i>=0)t.splice(i,1);else t.push(v);render()}

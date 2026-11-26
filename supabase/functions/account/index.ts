@@ -30,10 +30,22 @@ Deno.serve(async (req) => {
     if (!EMAIL.test(email) || email.length > 120) return json({ error: "Невірний email" }, 400);
     if (password.length < 8 || password.length > 72) return json({ error: "Пароль має містити щонайменше 8 символів" }, 400);
     if (!full_name) return json({ error: "Вкажіть імʼя" }, 400);
-    const { error } = await admin.auth.admin.createUser({ email, password, email_confirm: true, user_metadata: { full_name } });
-    if (error) {
-      const taken = /already|registered|exists/i.test(error.message);
+    const { data: cu, error } = await admin.auth.admin.createUser({ email, password, email_confirm: true, user_metadata: { full_name } });
+    if (error || !cu?.user) {
+      const taken = /already|registered|exists/i.test(error?.message ?? "");
       return json({ error: taken ? "Цей email уже зареєстровано. Увійдіть або попросіть тренера скинути пароль." : "Не вдалося створити акаунт" }, taken ? 409 : 400);
+    }
+    const SECS = ["bike", "swim", "run"];
+    const memberOf = (Array.isArray(b.member_sections) ? b.member_sections : []).map(String).filter((x) => SECS.includes(x));
+    const coachOf = (Array.isArray(b.coach_sections) ? b.coach_sections : []).map(String).filter((x) => SECS.includes(x));
+    if (memberOf.length || coachOf.length) {
+      await admin.from("profiles").upsert({
+        id: cu.user.id,
+        full_name,
+        status: "pending",
+        invite_member: memberOf,
+        invite_coach: coachOf,
+      }, { onConflict: "id" });
     }
     return json({ ok: true });
   }

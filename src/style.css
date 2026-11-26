@@ -245,3 +245,8 @@ nav.tabs{padding-bottom:env(safe-area-inset-bottom)}
 .pchips{display:flex;flex-wrap:wrap;gap:4px;margin-top:4px}
 .spill{display:inline-flex;align-items:center;gap:4px;font-size:11px;line-height:16px;border-radius:8px;padding:1px 7px;background:color-mix(in srgb,var(--sc) 16%,transparent);color:var(--sc);white-space:nowrap}
 .emo{display:inline-block;line-height:1;text-align:center}
+
+.prrow{flex-wrap:wrap;align-items:flex-start;gap:8px !important;padding-top:10px;padding-bottom:10px}
+.prrow .practs{display:flex;gap:8px;width:100%}
+.prrow .practs .chip{flex:1;justify-content:center;min-width:0}
+.invurl{font-size:13px;line-height:18px;word-break:break-all;background:var(--s2);border:1px solid var(--bd2);border-radius:12px;padding:12px 14px;color:var(--tx2)}

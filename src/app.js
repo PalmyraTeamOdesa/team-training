@@ -33,7 +33,7 @@ function render(){
  renderSheet();
 }
 function logoHtml(){return window.__LOGO?'<img class="logo logoimg" src="icons/logo-256.png" alt="TRITON" width="88" height="88">':'<div class="logo">T</div>'}
-function go(tab){if(isCoach())st.ctab=tab;else st.tab=tab;const m=$('main');if(m)m.scrollTop=0;render._k='';render();onTab(tab)}
+function go(tab){const cur=isCoach()?st.ctab:st.tab,same=cur===tab;if(isCoach())st.ctab=tab;else st.tab=tab;const m=$('main');if(m)m.scrollTop=0;render._k='';render();onTab(tab);if(typeof navWrite==='function')navWrite(same)}
 function headerView(){
  const p=me();const titles={today:'Сьогодні',plan:'План',team:'Команда',sec:'Секції',food:'Харчування',prog:'Прогрес'};
  const ctitles={team:'Люди',sec:'Секції',req:'Запити',lib:'Бібліотека',events:'Події',chat:'Чати'};
@@ -55,10 +55,10 @@ function coachView(){return ({team:peopleView,sec:secView,req:cReqView,lib:cLibV
 
 /* ---------- SHEETS ---------- */
 const SHEETS={};
-function openSheet(name,arg){sheetStack.push({name,arg});renderSheet(true)}
-function closeSheet(){sheetStack.pop();renderSheet()}
-function closeAll(){sheetStack=[];renderSheet()}
-function replaceSheet(name,arg){sheetStack[sheetStack.length-1]={name,arg};renderSheet(true)}
+function openSheet(name,arg){sheetStack.push({name,arg});_sheetDepth++;renderSheet(true);if(typeof navWrite==='function')navWrite(false)}
+function closeSheet(){if(_navPop){sheetStack.pop();_sheetDepth=Math.max(0,_sheetDepth-1);renderSheet();return}if(sheetStack.length&&history.state&&history.state.triton){history.back();return}sheetStack.pop();_sheetDepth=Math.max(0,_sheetDepth-1);renderSheet()}
+function closeAll(){sheetStack=[];_sheetDepth=0;renderSheet();if(!_navPop&&typeof navWrite==='function')navWrite(true)}
+function replaceSheet(name,arg){if(!sheetStack.length)sheetStack.push({name,arg});else sheetStack[sheetStack.length-1]={name,arg};renderSheet(true);if(typeof navWrite==='function')navWrite(true)}
 function renderSheet(fresh){
  const scrim=$('#scrim');if(!scrim)return;if(!sheetStack.length){scrim.classList.remove('open');setTimeout(()=>{if(!sheetStack.length)scrim.innerHTML=''},200);return}
  const top=sheetStack[sheetStack.length-1];let s;try{s=SHEETS[top.name](top.arg)}catch(e){console.error(e);s={title:'Помилка',body:`<div class="empty">Не вдалося відкрити</div>`}}
@@ -73,6 +73,25 @@ function toast(t,icon){const el=$('#toast');el.innerHTML=ic(icon||'check',20)+'<
 function fail(e,t){console.error(e);toast(t||('Помилка: '+((e&&e.message)||e)),'alert')}
 async function busy(btn,fn){if(btn&&btn.disabled)return;if(btn){btn.disabled=true;btn._t=btn.innerHTML;btn.innerHTML='<span class="spin"></span>'}try{return await fn()}catch(e){fail(e)}finally{if(btn&&document.body.contains(btn)){btn.disabled=false;btn.innerHTML=btn._t}}}
 
+
+/* ---------- HISTORY / ANDROID BACK ---------- */
+let _navPop=false,_exitAt=0,_sheetDepth=0;
+function navArg(a){if(a==null||['string','number','boolean'].includes(typeof a))return a;try{return JSON.parse(JSON.stringify(a))}catch(e){return null}}
+function navSnap(){return {triton:1,screen:st.screen,tab:isCoach()?st.ctab:st.tab,coachSelf:!!st.coachSelf,obStep:st.ob&&st.ob.step||0,sheets:sheetStack.map(s=>({name:s.name,arg:navArg(s.arg)}))}}
+function navUrl(){const h=location.hash||'';return location.pathname+location.search+(h&&/^#(i|recovery)\b/.test(h)?h:'')}
+function navWrite(replace){if(_navPop)return;try{history[replace?'replaceState':'pushState'](navSnap(),'',navUrl())}catch(e){}}
+function navBoot(force){const cur=history.state;if(!force&&cur&&cur.triton&&!cur.sentinel)return;try{history.replaceState(Object.assign(navSnap(),{sentinel:true}),'',navUrl());history.pushState(navSnap(),'',navUrl())}catch(e){}}
+function applyNav(s){if(s.screen==='auth'&&st.user){navWrite(true);return}
+ if(st.coach&&typeof s.coachSelf==='boolean')st.coachSelf=s.coachSelf;
+ const ct=['team','sec','req','lib','events','chat'],at=['today','plan','sec','food','prog','team'];
+ if(s.tab){if(isCoach()){if(ct.includes(s.tab))st.ctab=s.tab}else if(at.includes(s.tab))st.tab=s.tab}
+ if(st.screen==='onb'&&st.ob&&s.obStep)st.ob.step=s.obStep;
+ sheetStack=(s.sheets||[]).map(x=>({name:x.name,arg:x.arg}));_sheetDepth=sheetStack.length;render._k='';render()}
+function onNavPop(ev){const s=ev.state;
+ if(s&&s.triton&&s.sentinel){const now=Date.now();if(now-_exitAt<2000){_exitAt=0;history.back();return}_exitAt=now;toast('Натисніть ще раз, щоб вийти','info');try{history.pushState(navSnap(),'',navUrl())}catch(e){}return}
+ if(!s||!s.triton){const now=Date.now();if(now-_exitAt<2000){_exitAt=0;history.back();return}_exitAt=now;toast('Натисніть ще раз, щоб вийти','info');try{history.pushState(navSnap(),'',navUrl())}catch(e){}return}
+ _navPop=true;try{applyNav(s)}finally{_navPop=false}}
+addEventListener('popstate',onNavPop);
 /* ---------- SMALL COMPONENTS ---------- */
 function sportIco(s,cls){return `<span class="ico ${cls||''}">${ic((SPORT[s]||SPORT.bike).i,20)}</span>`}
 function tag(t,c){return `<span class="tag ${c||''}">${t}</span>`}

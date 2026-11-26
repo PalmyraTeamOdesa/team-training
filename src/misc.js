@@ -18,8 +18,10 @@ SHEETS.profile=()=>{const p=me();const coach=isCoach();
  ${sw?`<div class="list">${sw}</div>`:''}
  <div class="list">${rows.map(r=>li({left:`<span class="ico">${ic(r[0],20)}</span>`,t:r[1],s:r[2],on:r[4]||(r[3]==='pexport'?'exportData(this)':r[3]==='inst'?'instInstall(this)':`openSheet('${r[3]}')`)})).join('')}</div>
  <button class="btn d" onclick="logout()">${ic('logout',20)} Вийти</button><div class="t12 ter center">TRITON Team · версія ${APP_VERSION}</div></div>`}};
-async function toSelf(btn){await busy(btn,async()=>{st.coachSelf=true;await loadMine();await loadTeam();st.tab='today';closeAll();render._k='';if(!st.me.days.some(d=>d.acts.length)){if(memberSecs().length){st.tab='sec';render();toast('Це ваш кабінет спортсмена. Анкету й план можна заповнити пізніше','info');return}toast('Заповніть свою анкету, щоб отримати план','info');startOnb();return}render()})}
-function toCoach(){st.coachSelf=false;closeAll();render._k='';render()}
+async function toSelf(btn){await busy(btn,async()=>{sheetStack=[];_sheetDepth=0;st.coachSelf=true;await loadMine();await loadTeam();st.tab='today';render._k='';
+ if(!st.me.days.some(d=>d.acts.length)){if(memberSecs().length){st.tab='sec';render();if(typeof navWrite==='function')navWrite(false);toast('Це ваш кабінет спортсмена. Анкету й план можна заповнити пізніше','info');return}toast('Заповніть свою анкету, щоб отримати план','info');startOnb();return}
+ render();if(typeof navWrite==='function')navWrite(false)})}
+function toCoach(){sheetStack=[];_sheetDepth=0;st.coachSelf=false;render._k='';render();if(typeof navWrite==='function')navWrite(false)}
 function pf(label,key,attrs){const p=me();return `<div class="field"><label>${label}</label><input class="inp" value="${esc(p[key])}" ${attrs||''} oninput="me()['${key}']=this.value"></div>`}
 SHEETS.pdata=()=>{const p=me();return {title:'Мої дані',body:`<div class="stack">${pf('Імʼя і прізвище','name','maxlength="80"')}
  ${isCoach()?'':`${nf({id:'p-age',label:'Вік',val:p.age,min:6,max:90,step:1,unit:'р.',set:v=>p.age=v})}
@@ -107,6 +109,9 @@ function instStepsAndroid(){return `<div class="inst-steps" id="inst-android-ste
  <div class="inst-step"><span class="inst-num">2</span><div class="grow"><div class="t16">Оберіть «Додати на головний екран» або «Встановити додаток»</div><div class="t14 sec">Назва пункту залежить від версії Chrome</div></div></div>
 </div>
  <div class="card s8"><div class="t16">Якщо пункт не з’являється або нічого не відбувається</div><div class="t14 sec">Видаліть старий ярлик TRITON з екрана Додому і спробуйте знову. Іноді Chrome вважає застосунок уже встановленим.</div></div>`}
+
+function maybeOfferInstall(){if(instStandalone()||!st.me)return;const k='triton_inst_offer_'+(st.me.id||'');try{if(localStorage.getItem(k))return;localStorage.setItem(k,'1')}catch(e){}openSheet('phome')}
+function instContinueBrowser(){st._instSkip=true;try{localStorage.setItem(INST_KEY,String(Date.now()))}catch(e){}const b=$('#instbar');if(b)b.remove();closeSheet()}
 SHEETS.phome=()=>{
  if(instStandalone())return {title:'На екрані Додому',body:`<div class="stack"><div class="card s8 center" style="padding:24px 16px">${ic('check',28)}<div class="t16" style="margin-top:8px">Уже встановлено</div><div class="t14 sec">Ви відкрили TRITON як застосунок.</div></div></div>`};
  const i=instInfo();const logo=window.__LOGO?`<img class="logoimg" src="icons/logo-256.png" alt="" width="64" height="64" style="width:64px;height:64px">`:`<div class="logo" style="width:64px;height:64px;font-size:28px">T</div>`;
@@ -116,14 +121,14 @@ SHEETS.phome=()=>{
   <button class="btn p" onclick="instCopyLink()">${ic('copy',20)} Скопіювати посилання</button>
   ${instStepsIos()}`;
  else if(i.iOS)body+=`<div class="t14 sec">Safari не показує кнопку встановлення. Додайте застосунок так:</div>${instStepsIos()}`;
- else if(i.inApp)body+=`<div class="card s8"><div class="t16">Відкрийте сторінку в Chrome</div><div class="t14 sec">У Telegram, Instagram та подібних програмах встановити застосунок не вийде. Відкрийте це посилання в Chrome — там з’явиться пропозиція встановити, або меню ⋮ → «Додати на головний екран».</div></div>
+ else if(i.inApp)body+=`<div class="card s8"><div class="t16">${/Telegram/i.test(navigator.userAgent||'')?'Відкрийте посилання в Chrome, не в Telegram':'Відкрийте сторінку в Chrome'}</div><div class="t14 sec">У Telegram, Instagram та подібних програмах встановити застосунок не вийде. Відкрийте це посилання в Chrome — там з’явиться пропозиція встановити, або меню ⋮ → «Додати на головний екран».</div></div>
   <button class="btn p" onclick="instCopyLink()">${ic('copy',20)} Скопіювати посилання</button>
   <button class="btn s" onclick="instOpenChrome()">${ic('link',20)} Відкрити в Chrome</button>`;
  else body+=`<div class="t14 sec">У Chrome має з’явитись пропозиція встановити. Якщо її немає, зробіть це вручну:</div>${instStepsAndroid()}
   <div class="card s8"><div class="t16">iPhone і iPad</div><div class="t14 sec">Відкрийте в Safari, далі Поділитися → «На екран Додому».</div></div>
   <button class="btn s" onclick="instCopyLink()">${ic('copy',20)} Скопіювати посилання</button>`;
  body+='</div>';
- return {title:'Встановити на екран',body};
+ return {title:'Встановити на екран',body,foot:`<button class="btn t grow" onclick="instContinueBrowser()">Продовжити в браузері</button>`};
 };
 window._onBeforeInstall=function(e){window._installEvt=e;instMountBanner();if(sheetStack.some(s=>s.name==='profile'||s.name==='phome'))renderSheet()};
 window._onAppInstalled=function(){instOnInstalled()};
@@ -165,3 +170,5 @@ setInterval(()=>{try{if(!st.me||isCoach()||!('Notification' in window)||Notifica
 
 /* ---------- ERRORS ---------- */
 window.__errs=[];window.addEventListener('error',e=>window.__errs.push(String(e.message)));window.addEventListener('unhandledrejection',e=>window.__errs.push(String(e.reason&&e.reason.message||e.reason)));
+
+if(typeof parseInviteHash==="function")parseInviteHash();
