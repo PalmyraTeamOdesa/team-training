@@ -19,10 +19,10 @@
 <body>
 <div class="vp"><div class="phone"><div id="app"><div class="boot"><div class="logo">T</div></div></div><div class="scrim" id="scrim" onclick="closeAll()"></div><div class="toast" id="toast"></div></div></div>
 <script>window.__LOGO=__HAS_LOGO__;window._installEvt=null;
-addEventListener("beforeinstallprompt",function(e){e.preventDefault();window._installEvt=e;if(window._onBeforeInstall)window._onBeforeInstall(e)});
+addEventListener("beforeinstallprompt",function(e){window._installEvt=e;if(window._onBeforeInstall)window._onBeforeInstall(e)});
 addEventListener("appinstalled",function(){window._installEvt=null;if(window._onAppInstalled)window._onAppInstalled()});</script>
 <script src="vendor.js?v=__BUILD__"></script>
 <script src="app.js?v=__BUILD__"></script>
-<script>if('serviceWorker' in navigator){addEventListener('load',()=>navigator.serviceWorker.register('sw.js'))}</script>
+<script>if('serviceWorker' in navigator){const _hadSW=!!navigator.serviceWorker.controller;addEventListener('load',()=>navigator.serviceWorker.register('sw.js'));navigator.serviceWorker.addEventListener('controllerchange',()=>{if(_hadSW)location.reload()});}</script>
 </body>
 </html>

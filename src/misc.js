@@ -71,17 +71,27 @@ function instBannerHtml(){
  if(!instShouldBanner())return '';
  const i=instInfo();let title,sub,action,label;
  if(i.canPrompt){title='Встановити на екран';sub='Швидкий доступ, як застосунок';action='instInstall(this)';label='Встановити'}
- else if(i.iOS&&!i.iosSafari){title='Відкрийте в Safari';sub='Щоб додати на екран Додому';action="openSheet('phome')";label='Як це зробити'}
+ else if(i.iOS&&!i.iosSafari){title='Відкрийте в Safari';sub='Щоб додати на екран Додому';action="openSheet('phome')";label='Як встановити'}
  else if(i.iOS){title='На екран Додому';sub='Safari → Поділитися → На екран Додому';action="openSheet('phome')";label='Показати як'}
- else if(i.inApp){title='Відкрийте в Chrome';sub='Тут встановити не вийде';action="openSheet('phome')";label='Як це зробити'}
- else {title='Встановити на екран';sub='Працює як застосунок';action="openSheet('phome')";label='Як це зробити'}
+ else if(i.inApp){title='Відкрийте в Chrome';sub='Тут встановити не вийде';action="openSheet('phome')";label='Як встановити'}
+ else {title='Встановити на екран';sub='Працює як застосунок';action="openSheet('phome')";label='Як встановити'}
  return `<div class="instbar" id="instbar" role="region" aria-label="Встановити на екран"><span class="instico">${ic('phone',20)}</span><div class="grow"><div class="t14 w6 ell">${title}</div><div class="t12 sec ell">${sub}</div></div><button class="btn sm p instcta" onclick="${action}">${label}</button><button class="ib instx" onclick="instDismiss()" aria-label="Закрити">${ic('x',18)}</button></div>`;
 }
 function instMenuRow(){if(instStandalone())return null;const i=instInfo();const sub=i.canPrompt?'Працює як застосунок, без браузера':i.iOS&&!i.iosSafari?'Відкрийте посилання в Safari':i.iOS?'Поділитися → На екран Додому':i.inApp?'Відкрийте сторінку в Chrome':'Працює як застосунок';return ['phone','Встановити на екран',sub,i.canPrompt?'inst':'phome']}
 async function instInstall(btn){
- const ev=window._installEvt;if(!ev){openSheet('phome');return}
- try{ev.prompt();const res=await ev.userChoice;window._installEvt=null;if(res&&res.outcome==='accepted')instOnInstalled();else{st._instSkip=true;instMountBanner();if(sheetStack.some(s=>s.name==='profile'||s.name==='phome'))renderSheet()}}
- catch(e){openSheet('phome')}
+ const ev=window._installEvt;
+ if(!ev||typeof ev.prompt!=='function'){openSheet('phome');return}
+ let done=false;
+ const fallback=()=>{if(done)return;done=true;window._installEvt=null;instMountBanner();openSheet('phome')};
+ try{
+  const shown=Promise.resolve(ev.prompt());
+  const raced=await Promise.race([shown.then(()=>'ok'),new Promise(r=>setTimeout(()=>r('timeout'),2000))]);
+  if(raced!=='ok'){fallback();return}
+  const res=await ev.userChoice;
+  done=true;window._installEvt=null;
+  if(res&&res.outcome==='accepted')instOnInstalled();
+  else{st._instSkip=true;instMountBanner();if(sheetStack.some(x=>x.name==='profile'||x.name==='phome'))renderSheet()}
+ }catch(e){fallback()}
 }
 function instOnInstalled(){window._installEvt=null;st._instSkip=true;const b=$('#instbar');if(b)b.remove();toast('Застосунок встановлено');if(sheetStack.some(s=>s.name==='phome'||s.name==='profile'))closeAll()}
 function instCopyLink(){const url=location.href.split('#')[0];const done=()=>toast('Посилання скопійовано','link');if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(url).then(done).catch(()=>instCopyFallback(url,done));else instCopyFallback(url,done)}
@@ -91,19 +101,24 @@ function instStepsIos(){return `<div class="inst-steps">
  <div class="inst-step"><span class="inst-num">1</span><div class="grow"><div class="t16">Натисніть «Поділитися»</div><div class="t14 sec">Кнопка внизу екрана Safari, на iPad — вгорі</div></div><span class="inst-glyph" aria-hidden="true">${ic('iosshare',26)}</span></div>
  <div class="inst-step"><span class="inst-num">2</span><div class="grow"><div class="t16">Оберіть «На екран Додому»</div><div class="t14 sec">Прокрутіть список дій, якщо не бачите одразу, потім «Додати»</div></div><span class="inst-glyph" aria-hidden="true">${ic('homeplus',26)}</span></div>
 </div>`}
+function instStepsAndroid(){return `<div class="inst-steps" id="inst-android-steps">
+ <div class="inst-step"><span class="inst-num">1</span><div class="grow"><div class="t16">Відкрийте меню Chrome ⋮</div><div class="t14 sec">Три крапки вгорі справа</div></div></div>
+ <div class="inst-step"><span class="inst-num">2</span><div class="grow"><div class="t16">Оберіть «Додати на головний екран» або «Встановити додаток»</div><div class="t14 sec">Назва пункту залежить від версії Chrome</div></div></div>
+</div>
+ <div class="card s8"><div class="t16">Якщо пункт не з’являється або нічого не відбувається</div><div class="t14 sec">Видаліть старий ярлик TRITON з екрана Додому і спробуйте знову. Іноді Chrome вважає застосунок уже встановленим.</div></div>`}
 SHEETS.phome=()=>{
  if(instStandalone())return {title:'На екрані Додому',body:`<div class="stack"><div class="card s8 center" style="padding:24px 16px">${ic('check',28)}<div class="t16" style="margin-top:8px">Уже встановлено</div><div class="t14 sec">Ви відкрили TRITON як застосунок.</div></div></div>`};
  const i=instInfo();const logo=window.__LOGO?`<img class="logoimg" src="icons/logo-256.png" alt="" width="64" height="64" style="width:64px;height:64px">`:`<div class="logo" style="width:64px;height:64px;font-size:28px">T</div>`;
  let body=`<div class="stack"><div class="center s8">${logo}<div class="t16">TRITON Team на екрані Додому</div></div>`;
- if(i.canPrompt)body+=`<button class="btn p" onclick="instInstall(this)">${ic('phone',20)} Встановити на екран</button><div class="t14 sec">Після встановлення застосунок відкриватиметься без рядка браузера.</div>`;
+ if(i.canPrompt)body+=`<button class="btn p" id="inst-prompt-btn" onclick="instInstall(this)">${ic('phone',20)} Встановити на екран</button><div class="t14 sec">Після встановлення застосунок відкриватиметься без рядка браузера. Якщо вікно Chrome не з’явилось — зробіть це вручну:</div>${instStepsAndroid()}`;
  else if(i.iOS&&!i.iosSafari)body+=`<div class="card s8"><div class="t16">Відкрийте посилання в Safari</div><div class="t14 sec">Chrome, Telegram та інші програми на iPhone не вміють додавати на екран Додому. Скопіюйте посилання, відкрийте Safari і вставте його в адресний рядок.</div></div>
   <button class="btn p" onclick="instCopyLink()">${ic('copy',20)} Скопіювати посилання</button>
   ${instStepsIos()}`;
  else if(i.iOS)body+=`<div class="t14 sec">Safari не показує кнопку встановлення. Додайте застосунок так:</div>${instStepsIos()}`;
- else if(i.inApp)body+=`<div class="card s8"><div class="t16">Відкрийте сторінку в Chrome</div><div class="t14 sec">У Telegram, Instagram та подібних програмах встановити застосунок не вийде. Відкрийте це посилання в Chrome — там з’явиться кнопка «Встановити на екран».</div></div>
+ else if(i.inApp)body+=`<div class="card s8"><div class="t16">Відкрийте сторінку в Chrome</div><div class="t14 sec">У Telegram, Instagram та подібних програмах встановити застосунок не вийде. Відкрийте це посилання в Chrome — там з’явиться пропозиція встановити, або меню ⋮ → «Додати на головний екран».</div></div>
   <button class="btn p" onclick="instCopyLink()">${ic('copy',20)} Скопіювати посилання</button>
   <button class="btn s" onclick="instOpenChrome()">${ic('link',20)} Відкрити в Chrome</button>`;
- else body+=`<div class="card s8"><div class="t16">Android і комп’ютер</div><div class="t14 sec">Відкрийте сайт у Chrome. Якщо кнопка «Встановити» не з’явилась, меню ⋮ → «Додати на головний екран» або «Встановити сторінку як додаток».</div></div>
+ else body+=`<div class="t14 sec">У Chrome має з’явитись пропозиція встановити. Якщо її немає, зробіть це вручну:</div>${instStepsAndroid()}
   <div class="card s8"><div class="t16">iPhone і iPad</div><div class="t14 sec">Відкрийте в Safari, далі Поділитися → «На екран Додому».</div></div>
   <button class="btn s" onclick="instCopyLink()">${ic('copy',20)} Скопіювати посилання</button>`;
  body+='</div>';
@@ -111,7 +126,7 @@ SHEETS.phome=()=>{
 };
 window._onBeforeInstall=function(e){window._installEvt=e;instMountBanner();if(sheetStack.some(s=>s.name==='profile'||s.name==='phome'))renderSheet()};
 window._onAppInstalled=function(){instOnInstalled()};
-addEventListener('beforeinstallprompt',e=>{e.preventDefault();window._installEvt=e;instMountBanner()});
+addEventListener('beforeinstallprompt',e=>{window._installEvt=e;instMountBanner()});
 addEventListener('appinstalled',()=>instOnInstalled());
 try{const mq=window.matchMedia('(display-mode: standalone)');if(mq.addEventListener)mq.addEventListener('change',ev=>{if(ev.matches)instOnInstalled()})}catch(e){}
 
