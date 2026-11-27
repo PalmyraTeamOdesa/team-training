@@ -207,6 +207,8 @@ function notifLink(n){const L=n.link;if(!L||!L.t)return false;closeAll();
  if(L.t==='alt'&&L.s&&L.post){st.sec=L.s;st.secSeg='board';if(L.d)st.bDay=L.d;go('sec');setTimeout(()=>openAlt(L.s,L.post,L.a,L.d),60);return true}
  if(L.t==='board'&&L.s){st.sec=L.s;st.secSeg='board';if(L.d)st.bDay=L.d;go('sec');return true}
  if(L.t==='secchat'&&L.s){st.sec=L.s;go('sec');setTimeout(()=>openSheet('secChat',L.s),60);return true}
+ if(L.t==='teamchat'||L.t==='chat'){st.chatSeg='team';go('chat');return true}
+ if(L.t==='dm'&&(L.a||L.u)){st.chatSeg='dm';go('chat');setTimeout(()=>openSheet('dm',L.a||L.u),60);return true}
  if(L.t==='ready'&&L.a){if(L.a===st.me.id&&!isCoach()){go('today');return true}if(isCoach()&&st.athletes.some(a=>a.id===L.a)){go('team');setTimeout(()=>openSheet('athlete',L.a),60);return true}setTimeout(()=>openSheet('readyC',L.a),60);return true}
  if(L.t==='today'){if(isCoach()&&typeof cabinetSwitch==='function'){}go(isCoach()?'team':'today');return true}
  if(L.t==='events'||L.t==='ride'){goClub('events');return true}

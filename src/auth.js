@@ -67,6 +67,7 @@ async function startSession(session){
  st.screen='app';if(st.coach)st.ctab='team';render();subscribeLive();
  if(typeof navBoot==='function')navBoot();
  if(location.hash==='#recovery')openSheet('password');
+ else if(typeof pushConsumeHash==='function')pushConsumeHash();
  if(st._justApproved)st._justApproved=false;
  if(typeof maybeOfferInstall==='function')setTimeout(maybeOfferInstall,400);
 }

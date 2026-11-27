@@ -1,9 +1,10 @@
 /* ---------- PROFILE ---------- */
 SHEETS.profile=()=>{const p=me();const coach=isCoach();
  const sw=st.coach?(coach?li({left:`<span class="ico a">${ic('bike',20)}</span>`,t:'Мій кабінет спортсмена',s:'Ваш власний план і щоденник',on:'toSelf(this)'}):li({left:`<span class="ico a">${ic('users',20)}</span>`,t:'Повернутися в режим тренера',s:'Команда, запити, бібліотека',on:'toCoach()'})):'';
- const rows=coach?[['users','Люди клубу','Список, ролі, нагороди, пауза','people',"closeAll();go('team')"],['trophy','Нагороди й бали',rewardsSummary(),'myrewards','openRewards()'],['user','Мої дані',esc(p.name),'pdata'],['bell','Нагадування','Сповіщення в застосунку','premind'],['lock','Змінити пароль','','password']]:[
+ const rows=coach?[['users','Люди клубу','Список, ролі, нагороди, пауза','people',"closeAll();go('team')"],['trophy','Нагороди й бали',rewardsSummary(),'myrewards','openRewards()'],['user','Мої дані',esc(p.name),'pdata'],['bell','Сповіщення',(typeof pushStatusLabel==='function'?pushStatusLabel():''),'ppush'],['clock','Нагадування','Сповіщення в застосунку','premind'],['lock','Змінити пароль','','password']]:[
   ['trophy','Нагороди й бали',rewardsSummary(),'myrewards','openRewards()'],
   ['user','Мої дані',`${p.age} р. · ${p.height} см · ${String(p.weight).replace('.',',')} кг`,'pdata'],
+  ['bell','Сповіщення',(typeof pushStatusLabel==='function'?pushStatusLabel():''),'ppush'],
   ['target','Цілі',p.goals.map(g=>GOALS[g]).join(', ')||'—','pgoals'],
   ['gauge','Зони',zonesSub(p),'zones','zonesOpen()'],
   ['gym','Інвентар',p.equip.length+' позицій','pequip'],
@@ -180,7 +181,7 @@ async function exportData(btn){await busy(btn,async()=>{const uid=st.me.id;const
  downloadText('triton_moi_dani.json',JSON.stringify(out,null,2),'application/json');toast('Дані збережено у файл')})}
 
 /* ---------- NOTIFICATIONS ---------- */
-const N_IC={request:'inbox',wellness:'alert',skip:'info',award:'trophy',comment:'msg',dm:'msg',announce:'mega',join:'users',redflag:'alert',board:'list',board_mark:'check',points:'star',pause:'clock'};
+const N_IC={request:'inbox',wellness:'alert',skip:'info',award:'trophy',comment:'msg',dm:'msg',chat:'msg',sec_chat:'msg',announce:'mega',join:'users',redflag:'alert',board:'list',board_mark:'check',points:'star',pause:'clock',ready:'gauge',mark_comment:'msg',test:'bell'};
 SHEETS.notifs=()=>{const list=st.notifs;const unread=list.filter(n=>!n.read).map(n=>n.id);if(unread.length)setTimeout(async()=>{await sb.from('notifications').update({read:true}).in('id',unread);list.forEach(n=>n.read=true);render()},1200);
  return {title:'Сповіщення',body:list.length?`<div class="list">${list.map(n=>`<button class="li" style="align-items:flex-start;width:100%;text-align:left;background:none;color:inherit" onclick="notifGo(${n.id})"><span class="ico ${n.read?'':'a'}">${ic(N_IC[n.kind]||'bell',20)}</span><div class="grow"><div class="t14 w6">${esc(n.title)}</div>${n.body?`<div class="t12 sec">${esc(n.body)}</div>`:''}</div><span class="t12 ter">${ago(n.created_at)}</span></button>`).join('')}</div>`:emptyBox('Нових сповіщень немає')}};
 
@@ -221,6 +222,8 @@ function notifGo(id){const n=st.notifs.find(x=>x.id===id);if(!n)return;if(typeof
   if(k==='board'||k==='board_mark'||k==='points'){const sc=secByName();if(sc)st.sec=sc;go('sec');return}
   go('team');return}
  if(k==='dm'){st.chatSeg='dm';go('chat');const u=dmFrom();if(u)setTimeout(()=>openSheet('dm',u),60);return}
+ if(k==='chat'){st.chatSeg='team';go('chat');return}
+ if(k==='sec_chat'){go('chat');st.chatSeg='sec';return}
  if(k==='announce'){goClub(/заїзд/i.test(t)?'events':'feed');return}
  if(k==='comment'||k==='join'){goClub('feed');return}
  if(k==='award'){go('prog');setTimeout(()=>openSheet('ach'),60);return}

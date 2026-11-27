@@ -30,7 +30,7 @@ const WQ=[['Як ви спали?',['Погано','Нормально','Доб�
 function pendingBanner(){return st.me.status==='pending'?`<div class="note">${ic('clock',20)}<span>Тренер ще не підтвердив вашу участь. План і щоденник уже працюють, стрічка і чат команди відкриються після підтвердження.</span></div>`:''}
 function todayView(){
  const pid=st.me.id,p=me();const {days,note}=weekPlan(pid,0);const d=days[TODAY];const tIso=dayIso(0,TODAY);
- let h=`<div class="stack"><div><div class="over">${DAYS_FULL[TODAY]}, ${fmtDate(dayDate(0,TODAY))}</div><div class="t28" style="margin-top:4px">Привіт, ${esc(p.short)}</div></div>${pendingBanner()}${todayBoardCards()}${st.me.status==='active'?todayRides():''}`;
+ let h=`<div class="stack"><div><div class="over">${DAYS_FULL[TODAY]}, ${fmtDate(dayDate(0,TODAY))}</div><div class="t28" style="margin-top:4px">Привіт, ${esc(p.short)}</div></div>${pendingBanner()}${typeof pushPromptHtml==='function'?pushPromptHtml():''}${todayBoardCards()}${st.me.status==='active'?todayRides():''}`;
  const wl=st.well[tIso];
  if(wl&&st.ready&&st.ready.day===tIso)h+=readyCard();
  if(!wl){const q=st.wellStep<3?WQ[st.wellStep]:WQ4;h+=`<div class="card"><div class="between"><div class="over">Самопочуття · ${st.wellStep+1}/4</div><span class="t12 ter">план підлаштується</span></div><div class="q" style="margin-top:8px">${q[0]}</div>

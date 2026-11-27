@@ -12,3 +12,33 @@ self.addEventListener('fetch', (e) => {
   }
   e.respondWith(caches.match(e.request).then((r) => r || fetch(e.request)));
 });
+
+self.addEventListener('push', (e) => {
+  let data = {};
+  try { data = e.data ? e.data.json() : {}; } catch (err) {}
+  const title = data.title || 'TRITON';
+  const opts = {
+    body: data.body || '',
+    icon: 'icons/icon-192.png',
+    badge: 'icons/icon-192.png',
+    tag: data.tag || 'triton',
+    renotify: !!data.renotify,
+    data: { url: data.url || './' },
+    lang: 'uk'
+  };
+  e.waitUntil(self.registration.showNotification(title, opts));
+});
+
+self.addEventListener('notificationclick', (e) => {
+  e.notification.close();
+  const target = (e.notification.data && e.notification.data.url) || './';
+  e.waitUntil((async () => {
+    const abs = new URL(target, self.registration.scope).href;
+    const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    for (const c of windows) {
+      try { c.postMessage({ type: 'triton-push-nav', url: abs }); } catch (err) {}
+      if ('focus' in c) { await c.focus(); return; }
+    }
+    await self.clients.openWindow(abs);
+  })());
+});

@@ -20,7 +20,7 @@ async function loadAll(){
  if(!st.coach&&st.me.status!=='active')return;
  await loadSections().catch(e=>console.warn(e));
  if(!st.coach&&coachSecs().length&&!memberSecs().length&&st.tab==='today')st.tab='sec';
- const tasks=[loadNotifs(),loadMembers()];
+ const tasks=[loadNotifs(),loadMembers(),loadPushPrefs()];
  if(st.coach)tasks.push(loadCoach(),loadTeam());
  else if(st.me.onboarded)tasks.push(loadMine(),loadTeam());
  await Promise.all(tasks);
