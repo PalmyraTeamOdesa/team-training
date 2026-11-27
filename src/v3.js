@@ -39,7 +39,7 @@ function avBase(){const c=st._crop;return c.S/Math.min(c.w,c.h)}
 function avClamp(){const c=st._crop;const s=avBase()*c.z;const mx=Math.max(0,(c.w*s-c.S)/2),my=Math.max(0,(c.h*s-c.S)/2);c.x=Math.max(-mx,Math.min(mx,c.x));c.y=Math.max(-my,Math.min(my,c.y))}
 function avDraw(){const c=st._crop,cv=$('#cropc');if(!c||!cv)return;const k=cv.width/c.S;const ctx=cv.getContext('2d');ctx.fillStyle='#111';ctx.fillRect(0,0,cv.width,cv.height);
  const s=avBase()*c.z;const dw=c.w*s,dh=c.h*s;ctx.imageSmoothingQuality='high';ctx.drawImage(c.img,(c.S/2+c.x-dw/2)*k,(c.S/2+c.y-dh/2)*k,dw*k,dh*k)}
-function avZoom(z,cx,cy){const c=st._crop;if(!c)return;const z2=Math.max(1,Math.min(4,z));const r=z2/c.z;cx=cx||0;cy=cy||0;c.x=(c.x-cx)*r+cx;c.y=(c.y-cy)*r+cy;c.z=z2;avClamp();avDraw();const s=$('#cropz');if(s&&+s.value!==z2)s.value=z2}
+function avZoom(z,cx,cy){const c=st._crop;if(!c)return;const z2=Math.max(1,Math.min(4,z));const r=z2/c.z;cx=cx||0;cy=cy||0;c.x=(c.x-cx)*r+cx;c.y=(c.y-cy)*r+cy;c.z=z2;avClamp();avDraw();const s=$('#cropz');if(s&&+s.value!==z2){s.value=z2;if(typeof slSync==='function')slSync(s)}}
 function avCropBind(){const el=$('#crop'),c=st._crop;if(!el||!c||el._b)return;el._b=1;c.S=el.clientWidth||300;avClamp();avDraw();
  const P=new Map();let pinch=null;const rel=e=>{const r=el.getBoundingClientRect();return [e.clientX-r.left-r.width/2,e.clientY-r.top-r.height/2]};
  el.addEventListener('pointerdown',e=>{el.setPointerCapture(e.pointerId);P.set(e.pointerId,[e.clientX,e.clientY]);if(P.size===2){const [a,b]=[...P.values()];pinch={d:Math.hypot(a[0]-b[0],a[1]-b[1]),z:c.z}}e.preventDefault()});

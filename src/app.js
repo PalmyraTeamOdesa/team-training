@@ -31,6 +31,7 @@ function render(){
  else app.innerHTML=headerView()+(typeof instBannerHtml==="function"?instBannerHtml():"")+'<main id="main">'+(isCoach()?coachView():athleteView())+'</main>'+tabsView();
  const m2=app.querySelector('main');if(m2&&render._k===key)m2.scrollTop=sc;render._k=key;
  renderSheet();
+ if(typeof slEnhance==='function')slEnhance();
 }
 function logoHtml(){return window.__LOGO?'<img class="logo logoimg" src="icons/logo-256.png" alt="TRITON" width="88" height="88">':'<div class="logo">T</div>'}
 function go(tab){const cur=isCoach()?st.ctab:st.tab,same=cur===tab;if(isCoach())st.ctab=tab;else st.tab=tab;const m=$('main');if(m)m.scrollTop=0;render._k='';render();onTab(tab);if(typeof navWrite==='function')navWrite(same)}
@@ -72,6 +73,7 @@ function renderSheet(fresh){
   <div class="sh-body">${s.body}</div>${s.foot?`<div class="sh-foot">${s.foot}</div>`:''}</div>`;
  scrim.classList.add('open');const nb=scrim.querySelector('.sh-body');if(nb)nb.scrollTop=sc;
  if(typeof instSyncShareArrow==='function')instSyncShareArrow();
+ if(typeof slEnhance==='function')slEnhance(scrim);
 }
 function toast(t,icon){const el=$('#toast');el.innerHTML=ic(icon||'check',20)+'<span>'+esc(t)+'</span>';el.classList.add('show');clearTimeout(toast._t);toast._t=setTimeout(()=>el.classList.remove('show'),2800)}
 function fail(e,t){console.error(e);toast(t||('Помилка: '+((e&&e.message)||e)),'alert')}
