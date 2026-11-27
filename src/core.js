@@ -204,3 +204,15 @@ const MEALPLANS=[
  {t:'Довгий заїзд · 3 000 ккал',items:['Сніданок: вівсянка 100 г, мед, банан','У заїзді: 2 батончики, 2 гелі, 1,5 л напою','Після: макарони 200 г, курка 150 г','Вечеря: риба, картопля, овочі']}
 ];
 const SHOPPING=['Вівсянка 1 кг','Рис 1 кг','Гречка 1 кг','Курка філе 1,5 кг','Риба 600 г','Яйця 20 шт','Кисломолочний сир 800 г','Йогурт 1 л','Банани 1 кг','Овочі для салату','Горіхи 200 г','Мед'];
+
+/* Safe-area top: env(safe-area-inset-top) is often 0 on Android edge-to-edge PWAs. */
+function satEnv(){try{const d=document.createElement('div');d.style.cssText='position:fixed;visibility:hidden;pointer-events:none;padding-top:env(safe-area-inset-top,0px)';(document.documentElement||document.body).appendChild(d);const n=parseFloat(getComputedStyle(d).paddingTop)||0;d.remove();return n}catch(e){return 0}}
+function satApply(){let fb=0;const env=satEnv();
+ if(env<1){const stand=window.matchMedia('(display-mode: standalone)').matches||window.matchMedia('(display-mode: fullscreen)').matches||window.matchMedia('(display-mode: minimal-ui)').matches||!!navigator.standalone;
+  const android=/Android/i.test(navigator.userAgent||'');
+  let vh=0;try{const a=document.createElement('div'),b=document.createElement('div');a.style.cssText='position:fixed;visibility:hidden;height:100vh;width:0';b.style.cssText='position:fixed;visibility:hidden;height:100svh;width:0';document.documentElement.append(a,b);vh=Math.max(0,a.offsetHeight-b.offsetHeight);a.remove();b.remove()}catch(e){}
+  if(stand&&(android||vh>=20))fb=Math.max(vh,32);else if(android&&stand)fb=32}
+ document.documentElement.style.setProperty('--sat-fallback',fb+'px')}
+satApply();addEventListener('resize',satApply);
+try{if(window.visualViewport)visualViewport.addEventListener('resize',satApply)}catch(e){}
+try{const mq=window.matchMedia('(display-mode: standalone)');if(mq.addEventListener)mq.addEventListener('change',satApply)}catch(e){}
