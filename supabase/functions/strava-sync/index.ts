@@ -90,6 +90,7 @@ function rowOf(a: any, uid: string, p: Prof) {
     pace_sec: pace, tss: L.tss, intensity: L.IF, started_at: a.start_date, external_id: "strava:" + a.id,
     device: a.device_name ? String(a.device_name).slice(0, 60) : "Strava", source: "strava",
     decoupling: a.__dec != null ? a.__dec : null,
+    route_polyline: a.map?.summary_polyline || null,
   };
 }
 function weekStart(day: string) {
