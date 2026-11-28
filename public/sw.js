@@ -2,9 +2,25 @@
 const CACHE = 'triton-v2-__BUILD__';
 const SHELL = ['./', 'index.html', 'style.css?v=__BUILD__', 'vendor.js?v=__BUILD__', 'app.js?v=__BUILD__', 'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/maskable-192.png', 'icons/maskable-512.png', 'icons/apple-touch-icon.png', 'icons/favicon-32.png'].concat(__HAS_LOGO__ ? ['icons/logo-256.png'] : []);
 self.addEventListener('install', (e) => { e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting())); });
-self.addEventListener('activate', (e) => { e.waitUntil(caches.keys().then((ks) => Promise.all(ks.filter((k) => k !== CACHE).map((k) => caches.delete(k)))).then(() => self.clients.claim())); });
+self.addEventListener('activate', (e) => { e.waitUntil(caches.keys().then((ks) => Promise.all(ks.filter((k) => k !== CACHE && k !== 'triton-share').map((k) => caches.delete(k)))).then(() => self.clients.claim())); });
+// Android Web Share Target: Garmin Connect / Strava / Zwift / file managers share .fit/.gpx/.tcx here.
+// Files are parked in a private cache and the app picks them up at ./?share=1 (only for approved members).
+async function takeShare(req) {
+  try {
+    const fd = await req.formData();
+    const files = fd.getAll('files').filter((f) => f && typeof f === 'object' && f.size > 0 && f.size <= 50 * 1024 * 1024).slice(0, 40);
+    const c = await caches.open('triton-share');
+    for (const k of await c.keys()) await c.delete(k);
+    let i = 0;
+    for (const f of files) {
+      await c.put(new Request('./__share/' + (i++)), new Response(f, { headers: { 'x-name': encodeURIComponent(f.name || 'workout.fit'), 'content-type': 'application/octet-stream' } }));
+    }
+  } catch (err) {}
+  return Response.redirect(new URL('./?share=1', self.registration.scope).href, 303);
+}
 self.addEventListener('fetch', (e) => {
   const u = new URL(e.request.url);
+  if (e.request.method === 'POST' && u.origin === location.origin && u.pathname.endsWith('/share-target')) { e.respondWith(takeShare(e.request)); return; }
   if (e.request.method !== 'GET' || u.origin !== location.origin) return;
   if (e.request.mode === 'navigate') {
     e.respondWith(fetch(e.request).catch(() => caches.match('index.html')));

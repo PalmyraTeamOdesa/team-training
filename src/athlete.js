@@ -51,7 +51,7 @@ function todayView(){
   <div class="between" style="margin-top:12px">${days.map(x=>{const c=x.rest?'var(--s2)':isDone(pid,0,x.i)?'var(--acc)':isSkip(pid,0,x.i)?'var(--warn)':x.i===TODAY?'var(--acc-soft)':'var(--s3)';return `<div class="center" style="width:36px"><div class="t12 ${x.i===TODAY?'acc w7':'ter'}">${DAYS[x.i]}</div><div style="height:6px;border-radius:3px;margin-top:6px;background:${c}${x.i===TODAY&&!isDone(pid,0,x.i)?';box-shadow:inset 0 0 0 1px var(--acc)':''}"></div></div>`}).join('')}</div></div>`;
  const wt=st.weights.find(w=>w.day===tIso);const lastW=st.weights.length?st.weights[st.weights.length-1]:null;
  h+=`<div class="list">${li({left:`<span class="ico">${ic('gauge',20)}</span>`,t:'Вага',s:wt?'Сьогодні '+String(wt.kg).replace('.',',')+' кг':lastW?'Останнє: '+String(lastW.kg).replace('.',',')+' кг, '+fmtDate(parseIso(lastW.day)):'Ще не вносили',on:"openSheet('weight')",right:wt?`<span class="c-ok">${ic('check',20)}</span>`:`<span class="tag a">Внести</span>`})}
- ${li({left:`<span class="ico">${ic('upload',20)}</span>`,t:'Завантажити файл тренування',s:'.fit, .gpx або .tcx з годинника чи компʼютера',on:"pickActivityFile()"})}
+ ${li({left:`<span class="ico">${ic('upload',20)}</span>`,t:'Імпорт тренувань',s:'Файли .fit, .gpx, .tcx з годинника, Zwift, Strava… можна кілька',on:"pickActivityFile()"})}
  ${li({left:`<span class="ico">${ic('plus',20)}</span>`,t:'Додати тренування поза планом',s:'Запишіть те, чого не було в плані',on:"openExtraLog()"})}</div>`;
  return h+'</div>'}
 async function wellAns(k){st.wellAns.push(k);if(st.wellStep<3){st.wellStep++;render();return}

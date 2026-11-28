@@ -10,7 +10,7 @@ SHEETS.profile=()=>{const p=me();const coach=isCoach();
   ['gym','Інвентар',p.equip.length+' позицій','pequip'],
   ['clock','Мій час і можливості','Дні, години, вид активності','schedule'],
   ['bell','Нагадування','Тренування о '+p.remind,'premind'],
-  ['link','Strava, Garmin і файли','Strava і Garmin незабаром · файли вже працюють','pconn'],
+  ['link','Імпорт тренувань','Файли з годинника, Zwift, Strava · автосинхронізація Strava','pconn'],
   ['eyeoff','Приватність',p.hide?'Цифри приховані':'Цифри видно команді','priv'],
   ['download','Експорт даних','JSON з усіма вашими даними','pexport'],
   ['lock','Змінити пароль','','password']];
@@ -47,9 +47,7 @@ SHEETS.premind=()=>{const p=me();const R=p.remindOn;return {title:'Нагаду�
  <div class="list">${[['morning','Ранкове самопочуття','Щодня в обраний час'],['workout','Тренування дня','Якщо ще не відмічено'],['water','Вода і білок','Двічі на день'],['weekly','Планування тижня','Неділя ввечері']].map(r=>`<button class="li" onclick="me().remindOn.${r[0]}=!me().remindOn.${r[0]};renderSheet()"><div class="grow"><div class="t16">${r[1]}</div><div class="t12 sec">${r[2]}</div></div><span class="tg ${R[r[0]]?'on':''}"></span></button>`).join('')}</div>
  <div class="note">${ic('info',20)}<span>Нагадування показуються, коли застосунок відкритий або встановлений на головний екран (дозвіл на сповіщення).</span></div></div>`,foot:`<button class="btn p" onclick="saveRemind(this)">Зберегти</button>`}};
 async function saveRemind(btn){await busy(btn,async()=>{await saveMe();try{if('Notification' in window&&Notification.permission==='default')await Notification.requestPermission()}catch(e){}closeSheet();toast('Збережено')})}
-SHEETS.pconn=()=>({title:'Strava, Garmin і файли',body:`<div class="stack"><div class="list">${[['Strava','Автоімпорт тренувань'],['Garmin Connect','Автоімпорт тренувань і сну']].map(c=>`<div class="li"><span class="ico">${ic('link',20)}</span><div class="grow"><div class="t16">${c[0]}</div><div class="t12 sec">${c[1]}</div></div>${tag('незабаром')}</div>`).join('')}</div>
- <button class="btn s" onclick="closeAll();pickActivityFile()">${ic('upload',20)} Завантажити .fit, .gpx або .tcx</button>
- <div class="t12 ter">Поки що експортуйте файл з годинника, Garmin Connect, Strava чи Zwift і завантажте сюди: ми прочитаємо час, дистанцію, пульс і потужність.</div></div>`});
+/* SHEETS.pconn lives in import.js */
 SHEETS.priv=()=>({title:'Приватність',body:`<div class="stack"><div class="list"><button class="li" onclick="togglePriv(this)"><div class="grow"><div class="t16">Приховати мої цифри</div><div class="t12 sec">Команда бачить тренування без потужності, темпу і дистанції</div></div><span class="tg ${me().hide?'on':''}"></span></button></div>
  <div class="note">${ic('lock',20)}<span>План, анкету, самопочуття, вагу і харчування бачите лише ви і тренер. Команда бачить тільки те, чим ви поділились самі.</span></div></div>`});
 async function togglePriv(btn){await busy(btn,async()=>{me().hide=!me().hide;await saveMe();renderSheet();toast(me().hide?'Цифри приховано':'Цифри видно команді')})}

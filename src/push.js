@@ -15,7 +15,7 @@ async function loadPushPrefs(){
  if(!st.me||(!st.coach&&st.me.status!=='active'))return;
  try{const r=await sb.from('push_prefs').select('*').eq('user_id',st.me.id).maybeSingle();st.pushPrefs=r.data||{chats:true,dms:true,news:true,awards:true,coach_alerts:true}}
  catch(e){st.pushPrefs=st.pushPrefs||{chats:true,dms:true,news:true,awards:true,coach_alerts:true}}
- try{if(!pushSupported()){st.pushOn=false;return}const reg=await navigator.serviceWorker.ready;const sub=await reg.pushManager.getSubscription();st.pushOn=!!sub}catch(e){st.pushOn=false}}
+ try{if(!pushSupported()){st.pushOn=false;return}const reg=await Promise.race([navigator.serviceWorker.ready,new Promise((_,rej)=>setTimeout(()=>rej(new Error('sw-timeout')),4000))]);const sub=await reg.pushManager.getSubscription();st.pushOn=!!sub}catch(e){st.pushOn=false}}
 async function pushEnsurePrefs(){
  if(st.pushPrefs&&st.pushPrefs.user_id)return st.pushPrefs;
  const row={user_id:st.me.id,chats:true,dms:true,news:true,awards:true,coach_alerts:true};

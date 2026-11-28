@@ -62,3 +62,16 @@ Edge Function `ai-assistant` викликає xAI API (`https://api.x.ai/v1/chat
 
 ## Встановлення на екран
 У Chrome (Android і комп’ютер) знову працює власна пропозиція встановити. Після входу також є банер: «Встановити», якщо Chrome дав подію, інакше «Як встановити» (меню ⋮ → «Додати на головний екран»). Той самий пункт є в меню профілю (аватар). На iPhone додається через Safari: Поділитися → «На екран Додому» (інструкція в тому ж пункті меню). Якщо відкрито в Telegram чи Instagram — підказка відкрити посилання в Chrome або Safari. Банер можна закрити; він не показується знову близько 7 днів і ховається, коли застосунок уже встановлено.
+
+## Імпорт тренувань
+- `src/import.js`: імпорт `.fit`, `.gpx`, `.tcx` (а також `.zip` / `.gz` з ними), кілька файлів одразу. Розбір іде в браузері: власний FIT-декодер (session/record, стислі мітки часу, мультиспорт = окреме тренування на кожен етап), GPX/TCX через DOMParser.
+- Зберігає час старту, вид спорту, тривалість (час руху), дистанцію, набір висоти, середній і макс. пульс, середню, макс. і NP потужність, каденс, калорії. TSS/IF рахуються від FTP (потужність), інакше від LTHR (пульс), інакше оцінка.
+- Таблиця `workout_logs`: нові колонки `started_at`, `external_id` (`file:<sha256>` / `strava:<id>`), `max_hr`, `cadence`, `elevation_m`, `max_power`, `intensity`, `device`. Унікальний індекс `(athlete_id, external_id)` не дає зберегти той самий файл двічі; на клієнті ще й схожі за часом старту (±5 хв) і тривалістю записи позначаються як дублікати. Якщо того дня вже є ручний запис того ж виду спорту, файл пропонує оновити його цифрами (назва, RPE і коментар лишаються).
+- Автозарахування: тренування з плану того ж дня і виду спорту отримує `workout_id`.
+- Android: `share_target` у маніфесті; service worker приймає POST на `./share-target`, кладе файли в кеш `triton-share` і відкриває `./?share=1`.
+
+## Strava (фаза 2, вимкнено, доки немає ключів)
+Edge Function `strava-sync` (verify_jwt=false, власна перевірка JWT для дій користувача). Вмикається, коли є секрети `STRAVA_CLIENT_ID` і `STRAVA_CLIENT_SECRET` (секрети Edge Functions або Vault `strava_client_id` / `strava_client_secret`). Необовʼязковий `STRAVA_WEBHOOK_VERIFY_TOKEN` (або Vault `strava_webhook_verify_token`) вмикає webhook.
+- Дії: `config`, `connect` (OAuth, scope `read,activity:read_all`), `sync` (останні 30 днів, далі з останньої синхронізації), `disconnect`, для адміна `webhook_subscribe` / `webhook_status`.
+- OAuth callback: `https://oqxoqooslqctjnkobehu.supabase.co/functions/v1/strava-sync?action=callback`, тож у Strava App «Authorization Callback Domain» = `oqxoqooslqctjnkobehu.supabase.co`.
+- Токени лежать у `strava_links` (RLS без політик, лише service role); клієнт бачить тільки `strava_status()`.

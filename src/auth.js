@@ -68,6 +68,7 @@ async function startSession(session){
  if(typeof navBoot==='function')navBoot();
  if(location.hash==='#recovery')openSheet('password');
  else if(typeof pushConsumeHash==='function')pushConsumeHash();
+ if(typeof impBootActions==='function')setTimeout(impBootActions,300);
  if(st._justApproved)st._justApproved=false;
  if(typeof maybeOfferInstall==='function')setTimeout(maybeOfferInstall,400);
 }
