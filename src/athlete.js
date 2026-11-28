@@ -41,7 +41,7 @@ function todayView(){
  else{
   const done=isDone(pid,0,TODAY),sk=isSkip(pid,0,TODAY);
   h+=`<div class="s12"><div class="over">Тренування на сьогодні</div>${workoutCard(d,pid,0,true)}`;
-  if(done)h+=`<div class="card"><div class="success"><div class="okcircle">${ic('check',28)}</div><div class="t16">Тренування зараховано</div><div class="t14 sec">Тренер побачить його у вашому звіті</div><button class="btn t" onclick="undoDay(this,0,${TODAY})">Скасувати</button></div></div>`;
+  if(done)h+=`<div class="card"><div class="success"><div class="okcircle">${ic('check',28)}</div><div class="t16">Тренування зараховано</div>${stravaTag(logsOn(dayIso(0,TODAY),pid).find(l=>l.status==='done'&&isStravaLog(l)),true)}<div class="t14 sec">Тренер побачить його у вашому звіті</div><button class="btn t" onclick="undoDay(this,0,${TODAY})">Скасувати</button></div></div>`;
   else if(sk)h+=`<div class="note">${ic('info',20)}<span>Пропущено: ${esc(sk)}. Тренер отримав сповіщення.</span></div><button class="btn t" style="align-self:center" onclick="undoDay(this,0,${TODAY})">Скасувати пропуск</button>`;
   else h+=`<button class="btn p" onclick="openLog(0,${TODAY})">${ic('check',20)} Виконано</button><button class="btn t" style="align-self:center" onclick="openSheet('skip',{wk:0,i:${TODAY}})">Пропустити</button>`;
   h+='</div>';

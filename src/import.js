@@ -237,10 +237,16 @@ SHEETS.impHelp=()=>({title:'Як експортувати тренування',
  <div class="t12 ter">Garmin Connect API доступний лише бізнес-партнерам Garmin, а Apple Health і Health Connect потребують нативного застосунку, тому їх поки підключаємо через файли або Strava.</div>
  <button class="btn s" onclick="closeSheet();setTimeout(pickActivityFile,50)">${ic('upload',20)} Вибрати файли</button></div>`});
 /* ---------- one log: details (athlete history, coach) ---------- */
+/* ---------- Strava sync badge + status ---------- */
+function isStravaLog(l){return !!l&&(l.source==='strava'||String(l.external_id||'').indexOf('strava:')===0)}
+function stravaSyncTime(l,short){if(!l||!l.created_at)return '';const d=new Date(l.created_at);if(isNaN(d))return '';const hm=d.toLocaleTimeString('uk-UA',{hour:'2-digit',minute:'2-digit'});
+ const dm=d.getDate()+'.'+String(d.getMonth()+1).padStart(2,'0');return d.toDateString()===new Date().toDateString()?hm:short?dm:dm+' '+hm}
+/* full=true → «Strava ✓ синхр. 14:05», compact (lists) → «Strava ✓ 14:05» */
+function stravaTag(l,full){if(!isStravaLog(l))return '';const t=stravaSyncTime(l,!full);return `<span class="tag ok stg" title="Тренування прийшло зі Strava">Strava ✓${t?(full?' синхр. ':' ')+t:''}</span>`}
 const SRC_N={manual:'вручну',file:'з файлу',strava:'Strava',garmin:'Garmin',board:'з дошки секції'};
 function logMeta(l){if(l.status==='skipped')return 'пропуск: '+esc(l.skip_reason||'');const s=[fmtMin(l.duration_min||0)];
  if(l.distance)s.push(l.sport==='swim'?fmtNum(l.distance)+' м':String(+l.distance).replace('.',',')+' км');if(l.elevation_m)s.push('↑'+l.elevation_m+' м');
- if(l.np||l.avg_power)s.push((l.np?'NP ':'')+(l.np||l.avg_power)+' Вт');if(l.avg_hr)s.push('♥ '+l.avg_hr);if(l.tss)s.push('TSS '+l.tss);if(l.source&&l.source!=='manual')s.push(SRC_N[l.source]||l.source);return s.join(' · ')}
+ if(l.np||l.avg_power)s.push((l.np?'NP ':'')+(l.np||l.avg_power)+' Вт');if(l.avg_hr)s.push('♥ '+l.avg_hr);if(l.tss)s.push('TSS '+l.tss);if(l.source&&l.source!=='manual'&&l.source!=='strava')s.push(SRC_N[l.source]||l.source);return s.join(' · ')}
 const _logv={};
 function logOpen(id,pid){const l=(pid&&st.allLogs||[]).concat(st.logs||[]).find(x=>x.id===id)||_logv[id];if(!l)return;_logv[id]=l;openSheet('logv',id)}
 function logOpenSec(id,aid){const d=st._secAth&&st._secAth[aid];const l=d&&(d.logs||[]).find(x=>x.id===id);if(!l)return;_logv[id]=l;openSheet('logv',id)}
@@ -250,14 +256,28 @@ SHEETS.logv=id=>{const l=_logv[id];if(!l)return {title:'Тренування',bo
   ['Темп',l.pace_sec&&typeof nfFmtTime==='function'?nfFmtTime(l.pace_sec)+(l.sport==='swim'?' /100 м':' /км'):''],['Пульс сер. / макс.',l.avg_hr?l.avg_hr+(l.max_hr?' / '+l.max_hr:'')+' уд/хв':''],
   ['Потужність сер.',l.avg_power?l.avg_power+' Вт'+(l.max_power?' (макс. '+l.max_power+')':''):''],['NP',l.np?l.np+' Вт':''],['Каденс',l.cadence?l.cadence+(l.sport==='run'?' кр/хв':' об/хв'):''],
   ['Дрейф пульсу',l.decoupling!=null?String(l.decoupling).replace('.',',')+' %'+(l.decoupling>=5?' (аеробна втома)':''):''],['Навантаження',l.tss?'TSS '+l.tss+(l.intensity?' · IF '+String(l.intensity).replace('.',','):''):''],['Калорії',l.kcal?l.kcal+' ккал':''],['RPE',l.rpe?l.rpe+' / 10':''],
-  ['Джерело',(SRC_N[l.source]||l.source||'')+(l.device?' · '+l.device:'')],['Коментар',l.note||'']].filter(x=>x[1]);
+  ['Джерело',(SRC_N[l.source]||l.source||'')+(l.device&&l.device!==(SRC_N[l.source]||l.source)?' · '+l.device:'')],['Синхронізація',isStravaLog(l)?'✓ Зі Strava'+(stravaSyncTime(l)?', '+stravaSyncTime(l):''):''],['Коментар',l.note||'']].filter(x=>x[1]);
  return {title:esc(l.title||SPORT[l.sport].n),body:`<div class="stack"><div class="list">${rows.map(x=>`<div class="li"><div class="grow"><div class="t12 ter">${x[0]}</div><div class="t14">${esc(String(x[1]))}</div></div></div>`).join('')}</div>
  ${l.file_path&&(st.coach||l.athlete_id===st.me.id)?`<button class="btn s" onclick="dlFile('${l.file_path}')">${ic('download',18)} Завантажити файл</button>`:''}</div>`}};
 /* ---------- connections sheet: files + Strava (phase 2, feature-flagged on the server) ---------- */
 const _impBoot=(()=>{try{const u=new URL(location.href);const m=(location.hash||'').match(/strava=([a-z_]+)/);return {share:u.searchParams.has('share'),strava:m?m[1]:null}}catch(e){return {}}})();
 async function stravaLoad(){st.strava={loading:true};renderSheet();
- try{const [c,s]=await Promise.all([sb.functions.invoke('strava-sync',{body:{action:'config'}}),sb.rpc('strava_status')]);st.strava=Object.assign({enabled:!!(c.data&&c.data.enabled)},s.data||{connected:false})}catch(e){console.warn(e);st.strava={enabled:false}}
+ try{const [c,s]=await Promise.all([sb.functions.invoke('strava-sync',{body:{action:'config'}}),sb.rpc('strava_status')]);st.strava=Object.assign({enabled:!!(c.data&&c.data.enabled)},s.data||{connected:false});
+  if(st.strava.connected){try{const r=await sb.from('strava_activity_sync').select('strava_activity_id,start_date,name,sport_type,distance_m,status,reason,source,synced_at').eq('athlete_id',st.me.id).order('start_date',{ascending:false}).limit(40);st.strava.acts=r.error?[]:(r.data||[])}catch(e){st.strava.acts=[]}}}catch(e){console.warn(e);st.strava={enabled:false}}
  renderSheet()}
+const STRAVA_WHY={duplicate:'дублікат, це тренування вже є в TRITON',too_short:'коротше за хвилину',db_error:'не вдалося зберегти, спробуйте «Синхронізувати зараз»'};
+const STRAVA_SPORT=t=>{t=String(t||'').toLowerCase();return t.includes('swim')?'Плавання':(t.includes('ride')||t.includes('cycl')||t==='velomobile'||t==='handcycle')?'Вело':(t.includes('run')||t==='walk'||t==='hike')?'Біг':'Зал'};
+function stravaDayLbl(iso){const d=new Date(iso);if(isNaN(d))return '';const n=Math.round((new Date(new Date().toDateString())-new Date(d.toDateString()))/864e5);return n===0?'сьогодні':n===1?'вчора':n===2?'позавчора':fmtDate(d)}
+function stravaActRow(x,showSrc){const ok=x.status==='imported';const km=x.distance_m>0?(x.sport_type&&/swim/i.test(x.sport_type)?fmtNum(x.distance_m)+' м':(x.distance_m/1000).toFixed(1).replace('.',',')+' км'):'';
+ const sub=[stravaDayLbl(x.start_date),STRAVA_SPORT(x.sport_type),km].filter(Boolean).join(' · ');
+ return `<div class="li" style="min-height:52px"><div class="grow"><div class="t14 w6 ell">${esc(x.name||'Тренування Strava')}</div><div class="t12 sec">${esc(sub)}${showSrc&&x.source==='backfill'?' · при підключенні':''}</div>${ok?'':`<div class="t12 ter">Причина: ${esc(STRAVA_WHY[x.reason]||x.reason||'невідома')}</div>`}</div>${ok?tag('у TRITON ✓','ok'):tag(x.status==='error'?'помилка':'не імпортовано','warn')}</div>`}
+function stravaStatusBlock(s){if(!s.connected)return '';const A=s.acts||[];const bf=A.filter(x=>x.source==='backfill');const bn=+s.backfill_imported||bf.filter(x=>x.status==='imported').length;
+ const bfBlock=s.backfilled_at?`<details class="li" style="display:block"${bf.length&&bf.length<=6?' open':''}><summary class="t14 w6" style="cursor:pointer">Підтягнуто при підключенні: ${bn} ${(bn%10===1&&bn%100!==11)||(bn%10>=2&&bn%10<=4&&(bn%100<10||bn%100>=20))?'тренування':'тренувань'}</summary>${bf.length?`<div class="list" style="margin-top:8px">${bf.map(x=>stravaActRow(x,false)).join('')}</div>`:`<div class="t12 sec" style="margin-top:8px">${bn?'Список зʼявиться після наступної синхронізації':'За останні 30 днів нових активностей у Strava не було'}</div>`}</details>`
+  :`<div class="li"><div class="grow"><div class="t14 w6">Початкове завантаження</div><div class="t12 sec">Ще не виконано. Натисніть «Синхронізувати зараз»: підтягнемо тренування за останні дні</div></div></div>`;
+ const recent=A.slice(0,10);
+ return `<div class="over">Статус синхронізації</div><div class="list">
+  <div class="li"><span class="ico a">${ic('check',20)}</span><div class="grow"><div class="t14 w6">Підключено як ${esc(s.name||'Strava')}</div><div class="t12 sec">${s.last_sync_at?'Остання синхронізація: '+new Date(s.last_sync_at).toLocaleString('uk-UA',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):'Ще не синхронізовано'}</div></div></div>${bfBlock}</div>
+ <div class="over">Останні активності зі Strava</div>${recent.length?`<div class="list">${recent.map(x=>stravaActRow(x,true)).join('')}</div>`:`<div class="t14 ter">Поки порожньо. Нові тренування зі Strava зʼявляться тут після синхронізації.</div>`}`}
 SHEETS.pconn=()=>{const S=st.strava;if(!S)setTimeout(stravaLoad,0);const s=S||{loading:true};
  const last=s.last_sync_at?new Date(s.last_sync_at).toLocaleString('uk-UA',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):'';
  const strava=s.loading?`<div class="li"><span class="ico">${ic('link',20)}</span><div class="grow"><div class="t16">Strava</div><div class="t12 sec">Перевіряю…</div></div><span class="spin"></span></div>`
@@ -270,17 +290,27 @@ SHEETS.pconn=()=>{const S=st.strava;if(!S)setTimeout(stravaLoad,0);const s=S||{l
  <button class="btn t" onclick="openSheet('impHelp')">${ic('info',18)} Як експортувати з Garmin, Wahoo, Zwift, Polar…</button>
  <div class="over">Автосинхронізація</div><div class="list">${strava}
   <div class="li"><span class="ico">${ic('link',20)}</span><div class="grow"><div class="t16">Garmin Connect</div><div class="t12 sec">Прямий доступ Garmin дає лише бізнес-партнерам. Увімкніть у Garmin Connect синхронізацію зі Strava або імпортуйте файли.</div></div></div></div>
- ${s.connected?`<div class="row" style="gap:8px"><button class="btn s grow" onclick="stravaSync(this)">${ic('refresh',18)} Синхронізувати</button><button class="btn t" onclick="stravaDisconnect(this)">Відключити</button></div>`:''}</div>`}};
+ ${s.connected?`<div class="row" style="gap:8px"><button class="btn s grow" onclick="stravaSync(this)">${ic('refresh',18)} Синхронізувати зараз</button><button class="btn t" onclick="stravaDisconnect(this)">Відключити</button></div>${stravaStatusBlock(s)}`:''}</div>`}};
 async function stravaCall(action,extra){const {data,error}=await sb.functions.invoke('strava-sync',{body:Object.assign({action},extra||{})});if(error){let m='';try{m=(await error.context.json()).error}catch(e){}throw new Error(m||error.message)}if(data&&data.error)throw new Error(data.error);return data}
 async function stravaConnect(btn){await busy(btn,async()=>{const d=await stravaCall('connect',{return_to:location.origin+location.pathname});if(d&&d.url)location.href=d.url})}
-async function stravaSync(btn,quiet){const run=async()=>{const d=await stravaCall('sync');
+async function stravaSync(btn,quiet){const run=async()=>{let d;try{d=await stravaCall('sync')}catch(e){if(quiet)throw e;const m=String(e&&e.message||'');throw new Error(m==='strava_rate_limit'?'Ліміт запитів Strava, спробуйте за кілька хвилин':m==='not_connected'?'Strava не підключено':m.indexOf('strava_')===0?'Strava не відповіла, спробуйте пізніше':m)}
  const r=await sb.from('workout_logs').select('*').eq('athlete_id',st.me.id).order('day');if(!r.error)st.logs=r.data;
  st.strava=null;render();if(sheetStack.length)renderSheet();
- toast(d.imported?'Зі Strava додано: '+d.imported:'Нових тренувань у Strava немає',d.imported?'check':'info');if(d.imported&&typeof checkNewAch==='function')checkNewAch();if(d.imported&&typeof aiRun==='function')aiRun('import')};
+ if(!quiet)toast(d.imported?'Зі Strava додано: '+d.imported:(d.total?'Усе вже в TRITON ('+d.total+' у Strava)':'Нових тренувань у Strava немає'),d.imported?'check':'info');
+ if(d.imported&&typeof checkNewAch==='function')checkNewAch();if(d.imported&&typeof aiRun==='function')aiRun('import')};
  if(quiet){try{await run()}catch(e){console.warn(e)}}else await busy(btn,run)}
 async function stravaDisconnect(btn){if(!confirm('Відключити Strava? Уже імпортовані тренування залишаться.'))return;await busy(btn,async()=>{await stravaCall('disconnect');st.strava=null;renderSheet();toast('Strava відключено','info')})}
 function impBootActions(){
  if(_impBoot.share){_impBoot.share=false;impConsumeShare()}
  if(_impBoot.strava){const k=_impBoot.strava;_impBoot.strava=null;try{history.replaceState(history.state||{},'',location.pathname+location.search)}catch(e){}
-  if(k==='ok'){toast('Strava підключено. Завантажую тренування…','check');openSheet('pconn');stravaSync(null,true)}
+  if(k==='ok'){openSheet('pconn');impAfterConnect()}
   else toast(k==='denied'?'Підключення Strava скасовано':'Не вдалося підключити Strava. Спробуйте ще раз','alert')}}
+
+/* after «Підключити»: the server already ran the backfill in the OAuth callback; reload logs and show «Підтягнуто при підключенні: N».
+   If the server-side backfill failed (backfilled_at is null) the first «sync» repeats it. */
+async function impAfterConnect(){try{let r=await sb.rpc('strava_status');let s=r.data;
+ if(s&&s.connected&&!s.backfilled_at){await stravaSync(null,true);r=await sb.rpc('strava_status');s=r.data}
+ const l=await sb.from('workout_logs').select('*').eq('athlete_id',st.me.id).order('day');if(!l.error)st.logs=l.data;
+ st.strava=null;render();if(sheetStack.length)renderSheet();
+ const n=s&&+s.backfill_imported||0;toast(n?'Strava підключено. Підтягнуто тренувань: '+n:'Strava підключено',n?'check':'info');
+ if(n){if(typeof checkNewAch==='function')checkNewAch();if(typeof aiRun==='function')aiRun('import')}}catch(e){console.warn(e);toast('Strava підключено','info')}}

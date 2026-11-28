@@ -97,48 +97,80 @@ function weekStart(day: string) {
   d.setUTCDate(d.getUTCDate() - i);
   return { ws: d.toISOString().slice(0, 10), i };
 }
+type Source = "backfill" | "webhook" | "manual";
 // deno-lint-ignore no-explicit-any
-async function store(db: SupabaseClient, uid: string, acts: any[]) {
-  if (!acts.length) return { imported: 0, skipped: 0 };
+async function store(db: SupabaseClient, uid: string, acts: any[], source: Source) {
+  const all = acts.filter((a) => a && a.id);
+  if (!all.length) return { imported: 0, skipped: 0 };
   const { data: prof } = await db.from("profiles").select("q").eq("id", uid).maybeSingle();
-  const rows = acts.filter((a) => a && a.id && !a.manual_only).map((a) => rowOf(a, uid, prof as Prof)).filter((r) => r.duration_min >= 1);
-  const days = [...new Set(rows.map((r) => r.day))].sort();
-  const { data: ex } = await db.from("workout_logs").select("id,day,started_at,duration_min,external_id,workout_id,status").eq("athlete_id", uid).gte("day", days[0]).lte("day", days[days.length - 1]);
-  const have = ex || [];
-  const { data: plans } = await db.from("plan_weeks").select("week_start,days").eq("athlete_id", uid).in("week_start", [...new Set(days.map((d) => weekStart(d).ws))]);
+  // per-activity result, saved to strava_activity_sync so the UI can show «у TRITON ✓» / «не імпортовано» + reason
+  // deno-lint-ignore no-explicit-any
+  const rec = new Map<number, any>();
+  // deno-lint-ignore no-explicit-any
+  const note = (a: any, status: string, reason: string | null, logId: number | null) => rec.set(+a.id, {
+    athlete_id: uid, strava_activity_id: +a.id, start_date: a.start_date || null, name: String(a.name || "").slice(0, 120) || null,
+    sport_type: String(a.sport_type || a.type || "").slice(0, 40) || null, distance_m: a.distance != null ? +a.distance : null,
+    moving_s: a.moving_time != null ? Math.round(+a.moving_time) : null, status, reason, workout_log_id: logId, source, synced_at: new Date().toISOString(),
+  });
+  const cand = all.filter((a) => !a.manual_only);
+  const pairs = cand.map((a) => ({ a, r: rowOf(a, uid, prof as Prof) }));
+  for (const { a, r } of pairs) if (r.duration_min < 1) note(a, "skipped", "too_short", null);
+  const rows = pairs.filter((x) => x.r.duration_min >= 1);
   let imported = 0, skipped = 0;
-  for (const r of rows) {
-    const t = Date.parse(r.started_at);
-    const dup = have.some((l) => l.external_id === r.external_id || (l.started_at && Math.abs(Date.parse(l.started_at) - t) <= 300_000 && (!l.duration_min || Math.abs(l.duration_min - r.duration_min) <= Math.max(5, l.duration_min * 0.15))));
-    if (dup) { skipped++; continue; }
-    // auto-match a planned workout of the same sport on that day
-    const { ws, i } = weekStart(r.day);
-    const pw = (plans || []).find((p) => p.week_start === ws);
-    // deno-lint-ignore no-explicit-any
-    const it = pw && Array.isArray(pw.days) ? ((pw.days as any[]).find((d) => d && d.i === i) || (pw.days as any[])[i])?.items?.find((x: any) => x && x.sport === r.sport && x.w) : null;
-    const row = { ...r, workout_id: it && !have.some((l) => l.day === r.day && l.status === "done" && l.workout_id === it.w) ? it.w : null };
-    const { data, error } = await db.from("workout_logs").upsert(row, { onConflict: "athlete_id,external_id", ignoreDuplicates: true }).select("id,day,started_at,duration_min,external_id,workout_id,status");
-    if (error) { console.error("insert", error.code); skipped++; continue; }
-    if (data && data.length) { imported++; have.push(data[0]); } else skipped++;
+  if (rows.length) {
+    const days = [...new Set(rows.map((x) => x.r.day))].sort();
+    const { data: ex } = await db.from("workout_logs").select("id,day,started_at,duration_min,external_id,workout_id,status").eq("athlete_id", uid).gte("day", days[0]).lte("day", days[days.length - 1]);
+    const have = ex || [];
+    const { data: plans } = await db.from("plan_weeks").select("week_start,days").eq("athlete_id", uid).in("week_start", [...new Set(days.map((d) => weekStart(d).ws))]);
+    for (const { a, r } of rows) {
+      const t = Date.parse(r.started_at);
+      const same = have.find((l) => l.external_id === r.external_id);
+      if (same) { skipped++; note(a, "imported", null, same.id); continue; }
+      const near = have.find((l) => l.started_at && Math.abs(Date.parse(l.started_at) - t) <= 300_000 && (!l.duration_min || Math.abs(l.duration_min - r.duration_min) <= Math.max(5, l.duration_min * 0.15)));
+      if (near) { skipped++; note(a, "skipped", "duplicate", near.id); continue; }
+      // auto-match a planned workout of the same sport on that day
+      const { ws, i } = weekStart(r.day);
+      const pw = (plans || []).find((p) => p.week_start === ws);
+      // deno-lint-ignore no-explicit-any
+      const it = pw && Array.isArray(pw.days) ? ((pw.days as any[]).find((d) => d && d.i === i) || (pw.days as any[])[i])?.items?.find((x: any) => x && x.sport === r.sport && x.w) : null;
+      const row = { ...r, workout_id: it && !have.some((l) => l.day === r.day && l.status === "done" && l.workout_id === it.w) ? it.w : null };
+      const { data, error } = await db.from("workout_logs").upsert(row, { onConflict: "athlete_id,external_id", ignoreDuplicates: true }).select("id,day,started_at,duration_min,external_id,workout_id,status");
+      if (error) { console.error("insert", error.code); skipped++; note(a, "error", "db_error", null); continue; }
+      if (data && data.length) { imported++; have.push(data[0]); note(a, "imported", null, data[0].id); } else { skipped++; note(a, "skipped", "duplicate", null); }
+    }
+  }
+  // never downgrade an activity we already imported earlier (e.g. a re-sync sees it as «already there»)
+  const ids = [...rec.keys()];
+  if (ids.length) {
+    const { data: old } = await db.from("strava_activity_sync").select("strava_activity_id").eq("athlete_id", uid).eq("status", "imported").in("strava_activity_id", ids);
+    for (const o of old || []) rec.delete(+o.strava_activity_id);
+    if (rec.size) {
+      const { error } = await db.from("strava_activity_sync").upsert([...rec.values()], { onConflict: "athlete_id,strava_activity_id" });
+      if (error) console.error("sync-log", error.code);
+    }
   }
   return { imported, skipped };
 }
-async function syncUser(uid: string, c: { id: string; sec: string }) {
+// First sync after connecting (backfilled_at is null) = backfill: last 30 days in at most 2 Strava requests
+// (covers yesterday / the day before / today and gives the AI planner some history). Later syncs are incremental.
+async function syncUser(uid: string, c: { id: string; sec: string }, source: Source = "manual") {
   const { data: link } = await svc.from("strava_links").select("*").eq("athlete_id", uid).maybeSingle();
   if (!link) return { error: "not_connected" };
   const token = await fresh(link as Link, c);
-  const since = link.last_sync_at ? Date.parse(link.last_sync_at) - 3 * 864e5 : Date.now() - 30 * 864e5;
+  const backfill = !link.backfilled_at;
+  const since = backfill ? Date.now() - 30 * 864e5 : link.last_sync_at ? Date.parse(link.last_sync_at) - 3 * 864e5 : Date.now() - 30 * 864e5;
   // deno-lint-ignore no-explicit-any
   const acts: any[] = [];
-  for (let page = 1; page <= 3; page++) {
+  for (let page = 1; page <= (backfill ? 2 : 3); page++) {
     const a = await api(token, `/athlete/activities?after=${Math.floor(since / 1000)}&per_page=100&page=${page}`);
     if (!Array.isArray(a) || !a.length) break;
     acts.push(...a);
     if (a.length < 100) break;
   }
-  const res = await store(svc, uid, acts);
-  await svc.from("strava_links").update({ last_sync_at: new Date().toISOString() }).eq("athlete_id", uid);
-  return res;
+  const res = await store(svc, uid, acts, backfill ? "backfill" : source);
+  const now = new Date().toISOString();
+  await svc.from("strava_links").update(backfill ? { last_sync_at: now, backfilled_at: now } : { last_sync_at: now }).eq("athlete_id", uid);
+  return { ...res, backfill, total: acts.length };
 }
 
 async function userOf(req: Request) {
@@ -186,7 +218,10 @@ Deno.serve(async (req) => {
         expires_at: new Date(t.expires_at * 1000).toISOString(), scope, athlete_name: [t.athlete.firstname, t.athlete.lastname].filter(Boolean).join(" ").slice(0, 80),
         updated_at: new Date().toISOString(),
       }, { onConflict: "athlete_id" });
-      return back(error ? "error" : "ok");
+      if (error) return back("error");
+      // initial backfill right after connecting (failure is non-fatal: the first manual/auto sync from the app repeats it)
+      try { await syncUser(stRow.athlete_id, c, "backfill"); } catch (e) { console.error("backfill", (e as Error).message); }
+      return back("ok");
     }
     if (req.method !== "POST") return json({ error: "method" }, 405);
     // deno-lint-ignore no-explicit-any
@@ -210,7 +245,7 @@ Deno.serve(async (req) => {
         try {
           const token = await fresh(link as Link, c);
           const a = await api(token, "/activities/" + encodeURIComponent(String(body.object_id)));
-          await store(svc, link.athlete_id, [a]);
+          await store(svc, link.athlete_id, [a], "webhook");
         } catch (e) { console.error("webhook", (e as Error).message); }
       }
       return json({ ok: true });
