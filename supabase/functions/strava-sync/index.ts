@@ -89,6 +89,7 @@ function rowOf(a: any, uid: string, p: Prof) {
     kcal: a.calories ? Math.round(a.calories) : a.kilojoules ? Math.round(a.kilojoules) : null,
     pace_sec: pace, tss: L.tss, intensity: L.IF, started_at: a.start_date, external_id: "strava:" + a.id,
     device: a.device_name ? String(a.device_name).slice(0, 60) : "Strava", source: "strava",
+    decoupling: a.__dec != null ? a.__dec : null,
   };
 }
 function weekStart(day: string) {
@@ -97,11 +98,95 @@ function weekStart(day: string) {
   d.setUTCDate(d.getUTCDate() - i);
   return { ws: d.toISOString().slice(0, 10), i };
 }
-type Source = "backfill" | "webhook" | "manual";
+// ---------- stream helpers (same formulas as the file importer in src/import.js) ----------
+const avgOf = (a: number[]) => a.length ? a.reduce((x, y) => x + y, 0) / a.length : 0;
+function npOf(samples: number[], times: number[] | null) {
+  let s = samples;
+  if (times && times.length === samples.length && times.length > 1) {
+    const t0 = times[0], t1 = times[times.length - 1];
+    if (t1 - t0 >= 60 && t1 - t0 < 86400) { const r: number[] = []; let j = 0; for (let t = t0; t <= t1; t++) { while (j + 1 < times.length && times[j + 1] <= t) j++; r.push(samples[j]); } s = r; }
+  }
+  if (s.length < 60) return 0;
+  const roll: number[] = []; let a = 0;
+  for (let i = 0; i < s.length; i++) { a += s[i]; if (i >= 30) a -= s[i - 30]; if (i >= 29) roll.push(a / 30); }
+  return Math.pow(roll.reduce((x, v) => x + v ** 4, 0) / roll.length, 0.25);
+}
+// aerobic decoupling Pa:Hr (%), warm-up (10 min) skipped; null when < 40 min or no power+HR
+function decOf(t: number[], pw: number[], hr: number[]) {
+  const v: { t: number; pw: number; hr: number }[] = [];
+  for (let i = 0; i < t.length; i++) { const x = { t: t[i], pw: pw[i], hr: hr[i] }; if (isFinite(x.t) && x.pw >= 0 && x.pw < 3000 && x.hr > 40 && x.hr < 230) v.push(x); }
+  if (v.length < 120) return null;
+  v.sort((a, b) => a.t - b.t);
+  const t0 = v[0].t + 600, t1 = v[v.length - 1].t;
+  if (t1 - v[0].t < 2400) return null;
+  const w = v.filter((x) => x.t >= t0); if (w.length < 100) return null;
+  const mid = (t0 + t1) / 2, A = w.filter((x) => x.t < mid), B = w.filter((x) => x.t >= mid);
+  if (A.length < 40 || B.length < 40) return null;
+  const ef = (h: typeof v) => avgOf(h.map((x) => x.pw)) / avgOf(h.map((x) => x.hr));
+  const e1 = ef(A), e2 = ef(B);
+  if (!(e1 > 0) || avgOf(A.map((x) => x.pw)) < 50) return null;
+  const d = (e1 - e2) / e1 * 100;
+  return isFinite(d) ? Math.max(-30, Math.min(40, +d.toFixed(1))) : null;
+}
+// Detail + streams for ONE activity (2 requests). Strava's API has no original .fit/.gpx, so HR/power/cadence come from streams;
+// the route (latlng) and altitude series are NOT stored (the workout_logs schema keeps summary numbers only, like the file importer).
 // deno-lint-ignore no-explicit-any
-async function store(db: SupabaseClient, uid: string, acts: any[], source: Source) {
+async function enrich(token: string, a: any) {
+  // deno-lint-ignore no-explicit-any
+  const out: any = { ...a };
+  try {
+    const d = await api(token, "/activities/" + encodeURIComponent(String(a.id)) + "?include_all_efforts=false");
+    Object.assign(out, d);
+  } catch (e) { if ((e as Error).message === "strava_rate_limit") throw e; }
+  if (out.manual) return out;
+  try {
+    const keys = ["time", "heartrate", "cadence"].concat(out.device_watts ? ["watts"] : []).join(",");
+    const S = await api(token, "/activities/" + encodeURIComponent(String(a.id)) + "/streams?key_by_type=true&keys=" + keys);
+    const g = (k: string): number[] => (S && S[k] && Array.isArray(S[k].data) ? S[k].data.map((x: unknown) => +(x as number)) : []);
+    const t = g("time"), hr = g("heartrate"), w = g("watts"), cad = g("cadence");
+    const hv = hr.filter((x) => x > 30 && x < 230);
+    if (hv.length > 30) { if (!out.average_heartrate) out.average_heartrate = avgOf(hv); out.max_heartrate = Math.max(out.max_heartrate || 0, ...hv); }
+    const cv = cad.filter((x) => x > 0);
+    if (cv.length > 30 && !out.average_cadence) out.average_cadence = avgOf(cv);
+    if (w.length > 30 && out.device_watts) {
+      const wv = w.map((x) => (isFinite(x) && x >= 0 && x < 3000 ? x : 0));
+      if (!out.average_watts) out.average_watts = avgOf(wv);
+      out.max_watts = Math.max(out.max_watts || 0, ...wv);
+      const np = npOf(wv, t.length === wv.length ? t : null);
+      if (np) out.weighted_average_watts = np;
+      if (hr.length === wv.length && t.length === wv.length) out.__dec = decOf(t, wv, hr);
+    }
+  } catch (e) { if ((e as Error).message === "strava_rate_limit") throw e; /* streams are optional (manual / private / no sensors) */ }
+  return out;
+}
+// empty placeholder = a log with no real data: no external id / file, never imported from a device, and either a missed day
+// (status skipped) or a «done» record with no metrics at all. Anything with metrics, a file or an external id is real data → stays «duplicate».
+// deno-lint-ignore no-explicit-any
+function isPlaceholder(l: any) {
+  if (l.external_id || l.file_path || l.source === "file" || l.source === "strava" || l.source === "garmin" || l.source === "board") return false;
+  if (l.status === "skipped") return true;
+  return !(l.duration_min > 0) && !(+l.distance > 0) && !l.avg_power && !l.np && !l.avg_hr && !l.max_hr && !(l.tss > 0) && !(l.kcal > 0);
+}
+// local midnight..midnight of `day` in the client's timezone (IANA name, else fixed offset in minutes) as epoch seconds
+function tzOffsetMin(tz: string, atMs: number) {
+  const f = new Intl.DateTimeFormat("en-US", { timeZone: tz, hourCycle: "h23", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit" });
+  const o: Record<string, number> = {}; for (const p of f.formatToParts(new Date(atMs))) if (p.type !== "literal") o[p.type] = +p.value;
+  return (Date.UTC(o.year, o.month - 1, o.day, o.hour, o.minute, o.second) - Math.floor(atMs / 1000) * 1000) / 60000;
+}
+function dayRange(day: string, tz: string | null, offMin: number | null) {
+  const [y, m, d] = day.split("-").map(Number);
+  const utcMid = Date.UTC(y, m - 1, d);
+  const at = (dd: number) => {
+    if (tz) { try { const g = utcMid + dd * 864e5; let off = tzOffsetMin(tz, g - 12 * 3600e3); off = tzOffsetMin(tz, g - off * 60e3); return Math.floor((g - off * 60e3) / 1000); } catch (_) { /* bad tz → fall through */ } }
+    return Math.floor((utcMid + dd * 864e5 - (offMin || 0) * 60e3) / 1000);
+  };
+  return { after: at(0), before: at(1) };
+}
+type Source = "backfill" | "webhook" | "manual" | "manual_day";
+// deno-lint-ignore no-explicit-any
+async function store(db: SupabaseClient, uid: string, acts: any[], source: Source, token: string | null = null) {
   const all = acts.filter((a) => a && a.id);
-  if (!all.length) return { imported: 0, skipped: 0 };
+  if (!all.length) return { imported: 0, skipped: 0, filled: 0, rate_limited: false };
   const { data: prof } = await db.from("profiles").select("q").eq("id", uid).maybeSingle();
   // per-activity result, saved to strava_activity_sync so the UI can show «у TRITON ✓» / «не імпортовано» + reason
   // deno-lint-ignore no-explicit-any
@@ -116,25 +201,44 @@ async function store(db: SupabaseClient, uid: string, acts: any[], source: Sourc
   const pairs = cand.map((a) => ({ a, r: rowOf(a, uid, prof as Prof) }));
   for (const { a, r } of pairs) if (r.duration_min < 1) note(a, "skipped", "too_short", null);
   const rows = pairs.filter((x) => x.r.duration_min >= 1);
-  let imported = 0, skipped = 0;
+  let imported = 0, skipped = 0, filled = 0, rateLimited = false;
   if (rows.length) {
     const days = [...new Set(rows.map((x) => x.r.day))].sort();
-    const { data: ex } = await db.from("workout_logs").select("id,day,started_at,duration_min,external_id,workout_id,status").eq("athlete_id", uid).gte("day", days[0]).lte("day", days[days.length - 1]);
+    const { data: ex } = await db.from("workout_logs").select("id,day,sport,title,started_at,duration_min,distance,avg_power,np,avg_hr,max_hr,tss,kcal,external_id,file_path,source,workout_id,status").eq("athlete_id", uid).gte("day", days[0]).lte("day", days[days.length - 1]);
     const have = ex || [];
     const { data: plans } = await db.from("plan_weeks").select("week_start,days").eq("athlete_id", uid).in("week_start", [...new Set(days.map((d) => weekStart(d).ws))]);
-    for (const { a, r } of rows) {
+    for (const { a, r: r0 } of rows) {
+      let r = r0;
       const t = Date.parse(r.started_at);
       const same = have.find((l) => l.external_id === r.external_id);
       if (same) { skipped++; note(a, "imported", null, same.id); continue; }
       const near = have.find((l) => l.started_at && Math.abs(Date.parse(l.started_at) - t) <= 300_000 && (!l.duration_min || Math.abs(l.duration_min - r.duration_min) <= Math.max(5, l.duration_min * 0.15)));
-      if (near) { skipped++; note(a, "skipped", "duplicate", near.id); continue; }
+      // an empty placeholder (missed / metric-less record) on that day is filled instead of reported as a duplicate; real data is never touched
+      const ph = near ? (isPlaceholder(near) ? near : null) : have.find((l) => l.day === r.day && l.sport === r.sport && isPlaceholder(l));
+      if (near && !ph) { skipped++; note(a, "skipped", "duplicate", near.id); continue; }
+      // full detail + streams only for activities we really write (2 requests each; stops quietly on 429)
+      if (token && !rateLimited) {
+        try { r = rowOf(await enrich(token, a), uid, prof as Prof); } catch (e) { if ((e as Error).message === "strava_rate_limit") rateLimited = true; else console.error("enrich", (e as Error).message); }
+      }
       // auto-match a planned workout of the same sport on that day
       const { ws, i } = weekStart(r.day);
       const pw = (plans || []).find((p) => p.week_start === ws);
       // deno-lint-ignore no-explicit-any
       const it = pw && Array.isArray(pw.days) ? ((pw.days as any[]).find((d) => d && d.i === i) || (pw.days as any[])[i])?.items?.find((x: any) => x && x.sport === r.sport && x.w) : null;
-      const row = { ...r, workout_id: it && !have.some((l) => l.day === r.day && l.status === "done" && l.workout_id === it.w) ? it.w : null };
-      const { data, error } = await db.from("workout_logs").upsert(row, { onConflict: "athlete_id,external_id", ignoreDuplicates: true }).select("id,day,started_at,duration_min,external_id,workout_id,status");
+      const planW = it && !have.some((l) => l.day === r.day && l.status === "done" && l.workout_id === it.w) ? it.w : null;
+      if (ph) {
+        // UPDATE only (no INSERT → no notification trigger); keeps id, workout_id/plan link, title, note, rpe
+        // deno-lint-ignore no-unused-vars
+        const { athlete_id: _u, day: _d, ...rest } = r;
+        const patch = { ...rest, title: ph.title || r.title, workout_id: ph.workout_id || planW, skip_reason: null, status: "done" };
+        const { data, error } = await db.from("workout_logs").update(patch).eq("id", ph.id).eq("athlete_id", uid).is("external_id", null).select("id");
+        if (error) { console.error("fill", error.code); skipped++; note(a, "error", "db_error", null); continue; }
+        if (data && data.length) { filled++; Object.assign(ph, { external_id: r.external_id, source: "strava", status: "done", duration_min: r.duration_min, started_at: r.started_at }); note(a, "imported", "filled_placeholder", ph.id); }
+        else { skipped++; note(a, "skipped", "duplicate", ph.id); }
+        continue;
+      }
+      const row = { ...r, workout_id: planW };
+      const { data, error } = await db.from("workout_logs").upsert(row, { onConflict: "athlete_id,external_id", ignoreDuplicates: true }).select("id,day,sport,title,started_at,duration_min,distance,avg_power,np,avg_hr,max_hr,tss,kcal,external_id,file_path,source,workout_id,status");
       if (error) { console.error("insert", error.code); skipped++; note(a, "error", "db_error", null); continue; }
       if (data && data.length) { imported++; have.push(data[0]); note(a, "imported", null, data[0].id); } else { skipped++; note(a, "skipped", "duplicate", null); }
     }
@@ -149,7 +253,7 @@ async function store(db: SupabaseClient, uid: string, acts: any[], source: Sourc
       if (error) console.error("sync-log", error.code);
     }
   }
-  return { imported, skipped };
+  return { imported, skipped, filled, rate_limited: rateLimited };
 }
 // First sync after connecting (backfilled_at is null) = backfill: last 30 days in at most 2 Strava requests
 // (covers yesterday / the day before / today and gives the AI planner some history). Later syncs are incremental.
@@ -271,6 +375,26 @@ Deno.serve(async (req) => {
       const r = await syncUser(me.uid, c);
       if ("error" in r) return json(r, 400);
       return json({ ok: true, ...r });
+    }
+    if (action === "sync_day") {
+      const day = String(body.day || "");
+      const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(day);
+      if (!m || isNaN(Date.parse(day + "T00:00:00Z"))) return json({ error: "bad_day" }, 400);
+      const nowUtc = Date.now();
+      if (Date.parse(day + "T00:00:00Z") > nowUtc + 36 * 3600e3 || Date.parse(day + "T00:00:00Z") < nowUtc - 400 * 864e5) return json({ error: "bad_day" }, 400);
+      const tz = typeof body.tz === "string" && body.tz.length < 60 ? body.tz : null;
+      const off = Number.isFinite(+body.tz_offset_min) ? Math.max(-840, Math.min(840, +body.tz_offset_min)) : 0;
+      const { data: link } = await svc.from("strava_links").select("*").eq("athlete_id", me.uid).maybeSingle();
+      if (!link) return json({ error: "not_connected" }, 400);
+      const token = await fresh(link as Link, c);
+      const { after, before } = dayRange(day, tz, off);
+      // 1 request for the list; then ≤ 2 requests (detail + streams) per activity we actually write; at most 6 activities
+      // deno-lint-ignore no-explicit-any
+      const list: any[] = await api(token, `/athlete/activities?after=${after}&before=${before}&per_page=30`);
+      const acts = (Array.isArray(list) ? list : []).sort((x, y) => Date.parse(x.start_date) - Date.parse(y.start_date)).slice(0, 6);
+      const res = await store(svc, me.uid, acts, "manual_day", token);
+      await svc.from("strava_links").update({ last_sync_at: new Date().toISOString() }).eq("athlete_id", me.uid);
+      return json({ ok: true, day, total: acts.length, ...res });
     }
     if (action === "disconnect") {
       const { data: link } = await svc.from("strava_links").select("*").eq("athlete_id", me.uid).maybeSingle();
