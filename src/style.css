@@ -319,3 +319,8 @@ input[type=range]{accent-color:var(--acc);min-height:32px;height:32px;touch-acti
 .rring b{width:52px;height:52px;border-radius:50%;background:var(--s1);display:grid;place-items:center;font-size:20px;font-variant-numeric:tabular-nums}
 .ready .tip{display:flex;gap:8px;align-items:flex-start;padding:10px 12px;border-radius:12px;background:var(--acc-soft);font-size:14px;line-height:20px}
 .ready .tip svg{color:var(--acc);flex:none;margin-top:1px}
+/* AI re-plan */
+.aicard{border:1px solid rgba(124,149,255,.28);background:linear-gradient(180deg,rgba(124,149,255,.08),transparent 70%),var(--s1)}
+.aich{background:var(--s2);border-radius:12px;padding:10px 12px;display:flex;flex-direction:column;gap:2px}
+.aich.rev{opacity:.55}
+.aich s{text-decoration-thickness:1px}

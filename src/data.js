@@ -24,7 +24,7 @@ async function loadAll(){
  if(st.coach)tasks.push(loadCoach(),loadTeam());
  else if(st.me.onboarded)tasks.push(loadMine(),loadTeam());
  await Promise.all(tasks);
- const extra=[loadSecChats()];if(st.coach)extra.push(loadReadyAll());await Promise.all(extra);
+ const extra=[loadSecChats()];if(st.coach)extra.push(loadReadyAll(),loadAiAll());await Promise.all(extra);
 }
 async function loadNotifs(){st.notifs=D(await sb.from('notifications').select('*').order('created_at',{ascending:false}).limit(60))}
 async function loadMembers(){st.members=D(await sb.rpc('team_members'))||[]}
@@ -42,9 +42,10 @@ async function loadMine(){
   sb.from('plan_weeks').select('*').eq('athlete_id',uid).gte('week_start',wkIso(-12))]);
  st.logs=D(logs);st.well={};D(well).forEach(w=>st.well[w.day]=w);st.weights=D(wts);st.food=D(food);
  st.cnts={};D(cnt).forEach(c=>st.cnts[c.day]=c);st.cnt=st.cnts[dayIso(0,TODAY)]||{water:0,coffee:0,alc:0};
- st.requests=D(req);st.awards=D(aw);st.unlock=D(unl);await loadReady();
+ st.requests=D(req);st.awards=D(aw);st.unlock=D(unl);await loadReady();await loadAi();
  D(plans).forEach(r=>st.plans[uid+'|'+r.week_start]=r);
  await ensurePlan(st.me,0);
+ if(typeof aiDaily==='function')setTimeout(aiDaily,1500);
 }
 async function loadTeam(){
  const [posts,rides,ch,chat,dms]=await Promise.all([

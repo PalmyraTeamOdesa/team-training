@@ -179,7 +179,7 @@ async function exportData(btn){await busy(btn,async()=>{const uid=st.me.id;const
  downloadText('triton_moi_dani.json',JSON.stringify(out,null,2),'application/json');toast('Дані збережено у файл')})}
 
 /* ---------- NOTIFICATIONS ---------- */
-const N_IC={request:'inbox',wellness:'alert',skip:'info',award:'trophy',comment:'msg',dm:'msg',chat:'msg',sec_chat:'msg',announce:'mega',join:'users',redflag:'alert',board:'list',board_mark:'check',points:'star',pause:'clock',ready:'gauge',mark_comment:'msg',test:'bell'};
+const N_IC={request:'inbox',wellness:'alert',skip:'info',award:'trophy',comment:'msg',dm:'msg',chat:'msg',sec_chat:'msg',announce:'mega',join:'users',redflag:'alert',board:'list',board_mark:'check',points:'star',pause:'clock',ready:'gauge',ai:'spark',mark_comment:'msg',test:'bell'};
 SHEETS.notifs=()=>{const list=st.notifs;const unread=list.filter(n=>!n.read).map(n=>n.id);if(unread.length)setTimeout(async()=>{await sb.from('notifications').update({read:true}).in('id',unread);list.forEach(n=>n.read=true);render()},1200);
  return {title:'Сповіщення',body:list.length?`<div class="list">${list.map(n=>`<button class="li" style="align-items:flex-start;width:100%;text-align:left;background:none;color:inherit" onclick="notifGo(${n.id})"><span class="ico ${n.read?'':'a'}">${ic(N_IC[n.kind]||'bell',20)}</span><div class="grow"><div class="t14 w6">${esc(n.title)}</div>${n.body?`<div class="t12 sec">${esc(n.body)}</div>`:''}</div><span class="t12 ter">${ago(n.created_at)}</span></button>`).join('')}</div>`:emptyBox('Нових сповіщень немає')}};
 

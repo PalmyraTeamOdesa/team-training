@@ -33,6 +33,7 @@ function todayView(){
  let h=`<div class="stack"><div><div class="over">${DAYS_FULL[TODAY]}, ${fmtDate(dayDate(0,TODAY))}</div><div class="t28" style="margin-top:4px">Привіт, ${esc(p.short)}</div></div>${pendingBanner()}${typeof pushPromptHtml==='function'?pushPromptHtml():''}${todayBoardCards()}${st.me.status==='active'?todayRides():''}`;
  const wl=st.well[tIso];
  if(wl&&st.ready&&st.ready.day===tIso)h+=readyCard();
+ h+=typeof aiTodayCard==='function'?aiTodayCard():'';
  if(!wl){const q=st.wellStep<3?WQ[st.wellStep]:WQ4;h+=`<div class="card"><div class="between"><div class="over">Самопочуття · ${st.wellStep+1}/4</div><span class="t12 ter">план підлаштується</span></div><div class="q" style="margin-top:8px">${q[0]}</div>
   <div class="wl">${q[1].map((o,k)=>`<button onclick="wellAns(${k})">${o}</button>`).join('')}</div></div>`}
  if(note&&note.k==='well'&&!(st.ready&&st.ready.day===tIso))h+=`<div class="note warn">${ic('info',20)}<span>${note.t}</span></div>`;
@@ -159,6 +160,7 @@ function planViewInner(){
   <div class="grid3" style="margin-top:16px">${[['0.8','Менше'],['1','Як завжди'],['1.2','Більше']].map(x=>`<button class="btn s" style="padding:0 8px" onclick="setNext(this,${x[0]})">${x[1]}</button>`).join('')}</div></div>`;
  if(note)h+=`<div class="note ${note.k==='well'?'warn':''}">${ic('info',20)}<span>${note.t}</span></div>`;
  if(locked)h+=`<div class="note">${ic('edit',20)}<span>Тренер Дмитро скоригував цей тиждень.</span></div>`;
+ if(wk===0||wk===1)h+=typeof aiPlanCard==='function'?aiPlanCard():'';
  const unl=unlocked();
  if(unl)h+=`<div class="note">${ic('unlock',20)}<span><b style="color:var(--tx)">Тренер дозволив зміни до ${fmtDate(new Date(st.unlock.until))}.</b> Торкніться дня, щоб змінити тренування.</span></div>`;
  h+=`<div class="between"><div class="t16">${weekRange(wk)}</div><div class="t14 sec">${tr.length} тренувань · ${fmtMin(mins)}</div></div>`;
@@ -166,7 +168,7 @@ function planViewInner(){
   const right=done?`<span class="c-ok">${ic('check',20)}</span>`:sk?tag('пропуск','warn'):(unl?`<span class="acc">${ic('edit',18)}</span>`:(d.rest?'':`<span class="chev">${ic('chev',20)}</span>`));
   const title=d.rest?'Відпочинок':esc(itemName(it));
   const altL=logsOn(dayIso(wk,d.i),pid).find(l=>l.source==='board'&&l.board_post_id);
-  const sub=(d.rest?'':d.items.map(x=>SPORT[x.sport].n).join(' + ')+' · '+fmtMin(dayMin(d))+(d.adapted?' · '+({light:'полегшено',recovery:'відновлення',rest:'відпочинок за самопочуттям'}[d.adapted]||'полегшено'):''))+(altL?(d.rest?'':' · ')+'🔁 зроблено інакше'+(altL.tss?' · '+altL.tss+' балів':''):'');
+  const sub=(d.rest?'':d.items.map(x=>SPORT[x.sport].n).join(' + ')+' · '+fmtMin(dayMin(d))+(d.adapted?' · '+({light:'полегшено',recovery:'відновлення',rest:'відпочинок за самопочуттям'}[d.adapted]||'полегшено'):'')+(d.items.some(x=>x.ai)?' · ✨ AI':''))+(altL?(d.rest?'':' · ')+'🔁 зроблено інакше'+(altL.tss?' · '+altL.tss+' балів':''):'');
   const on=unl?`openSheet('editDay',{pid:'${pid}',wk:${wk},i:${d.i}})`:(w?`openSheet('wk',{pid:'${pid}',wk:${wk},i:${d.i},j:0})`:'');
   return `<button class="li ${d.rest?'dim':''} ${wk===0&&d.i===TODAY?'today-mark':''}" onclick="${on}"><div class="dayc"><b>${DAYS[d.i]}</b><span>${dt.getDate()}</span></div><div class="grow"><div class="t16 ell">${title}</div>${sub?`<div class="t12 sec ell">${sub}</div>`:''}</div>${right}</button>`}).join('')}</div>`;
  const pend=st.requests.find(r=>r.status==='pending');

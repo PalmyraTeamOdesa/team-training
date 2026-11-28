@@ -1,7 +1,8 @@
 // TRITON coach-ai: (1) evaluates a «Зробив інакше» session vs the planned board task,
-// (2) writes a short daily readiness tip. Deterministic rules first, xAI text on top; never fails hard.
+// (2) writes a short daily readiness tip, (3) «replan»: load metrics (CTL/ATL/TSB…) → AI/rules adjustments of the next 7 days. Deterministic rules first, xAI text on top; never fails hard.
 // Key: Vault `xai_api_key` via public.get_app_secret (service role) or env XAI_API_KEY. Active members / admin only.
 import { createClient } from "npm:@supabase/supabase-js@2.119.2";
+import { addDays, describeSummary, summaryMatches, computeMetrics, contradicts, coversSafety, diffDays, GENERIC_REASON, latinish, protHints, proposals, rulesPlan, validateActions, type Action, type PDay, type Sug } from "./replan.ts";
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -59,7 +60,7 @@ Deno.serve(async (req) => {
   const uid = u.user.id;
   const admin = createClient(url, service, { auth: { persistSession: false } });
   const [{ data: pr }, { data: co }] = await Promise.all([
-    admin.from("profiles").select("status, age, full_name, q").eq("id", uid).maybeSingle(),
+    admin.from("profiles").select("status, age, full_name, q, paused").eq("id", uid).maybeSingle(),
     admin.from("coaches").select("user_id").eq("user_id", uid).maybeSingle(),
   ]);
   if (!co && pr?.status !== "active") return json({ error: "forbidden" }, 403);
@@ -153,6 +154,79 @@ Deno.serve(async (req) => {
     const tip = r.text.replace(/^["«]|["»]$/g, "").slice(0, 300);
     await admin.from("readiness").update({ tip, tip_source: tag }).eq("athlete_id", uid).eq("day", day);
     return json({ ok: true, tip, source: tag });
+  }
+
+  // ---------- AI re-plan of the next 7 days ----------
+  if (body.mode === "replan") {
+    const trig = ["import", "daily", "manual"].includes(String(body.trigger)) ? String(body.trigger) : "daily";
+    const today = kyivDay();
+    const days: PDay[] = (Array.isArray(body.days) ? body.days : []).slice(0, 10).map((d: any) => ({
+      date: String(d?.date || ""), i: clamp(Math.round(Number(d?.i) || 0), 0, 6), wk: clamp(Math.round(Number(d?.wk) || 0), -1, 2),
+      min: clamp(Math.round(Number(d?.min) || 0), 0, 600), tss: clamp(Math.round(Number(d?.tss) || 0), 0, 600),
+      hard: !!d?.hard, rest: !!d?.rest, prot: !!d?.prot, src: d?.src ? String(d.src).slice(0, 20) : undefined,
+      board: d?.board && typeof d.board === "object" ? { src: String(d.board.src || "").slice(0, 20), text: String(d.board.text || "").slice(0, 120), hard: !!d.board.hard } : undefined,
+      text: d?.text ? String(d.text).slice(0, 120) : undefined, names: d?.names ? String(d.names).slice(0, 120) : undefined,
+    })).filter((d: PDay) => /^\d{4}-\d\d-\d\d$/.test(d.date) && diffDays(d.date, today) >= 0 && diffDays(d.date, today) <= 7);
+    if (!days.length) return json({ error: "no days" }, 400);
+    const form = ((pr?.q as any)?.form || {}) as Record<string, number>;
+    const races = ((pr?.q as any)?.races || []) as { name?: string; date?: string }[];
+    const [{ data: logs }, { data: plans }, { data: prevRows }] = await Promise.all([
+      admin.from("workout_logs").select("id, day, sport, status, duration_min, tss, rpe, intensity, avg_power, np, avg_hr, max_hr, decoupling, created_at")
+        .eq("athlete_id", uid).gte("day", addDays(today, -131)).order("day"),
+      admin.from("plan_weeks").select("week_start, days, planned_count, planned_min").eq("athlete_id", uid).gte("week_start", addDays(today, -35)),
+      admin.from("ai_plan_adjustments").select("*").eq("athlete_id", uid).order("created_at", { ascending: false }).limit(25),
+    ]);
+    const prev = (prevRows || []) as any[];
+    const todays = prev.filter((r) => r.day === today);
+    const m: any = computeMetrics((logs || []) as any, today, { ftp: +form.ftp || undefined, lthr: +form.lthr || undefined, hrMax: +form.hrMax || undefined, hrRest: +form.hrRest || undefined }, (plans || []) as any, races);
+    const sig = JSON.stringify([today, (logs || []).length, Math.max(0, ...(logs || []).map((l: any) => l.id)), (logs || []).reduce((a: number, l: any) => a + (l.tss || 0) + (l.duration_min || 0), 0),
+      days.map((d) => [d.date, d.min, d.hard, d.rest, d.prot, d.board ? d.board.hard : 0]), form.ftp, form.lthr, form.hrMax]);
+    let h = 2166136261; for (let k = 0; k < sig.length; k++) { h ^= sig.charCodeAt(k); h = Math.imul(h, 16777619) >>> 0; }
+    const hash = h.toString(36);
+    if (pr?.paused) return json({ ok: true, skipped: "paused" });
+    // dedupe: same inputs → reuse; one automatic run a day; hard cap per day
+    const lastToday = todays[0];
+    if (lastToday && (lastToday.input_hash === hash || trig === "daily" || todays.length >= 8) && lastToday.status !== "reverted") return json({ ok: true, reused: true, row: lastToday });
+    const hold = prev.some((r) => r.status === "reverted" && diffDays(today, r.day) <= 2);
+    const prevSug: Sug[] = prev.flatMap((r) => (Array.isArray(r.suggestions) ? r.suggestions : [])).filter((x: any) => x && x.type && x.type !== "board");
+    const rp = rulesPlan(m, days);
+    let actions: Action[] = rp.actions, summary = rp.summary, source = "rules";
+    let hints: Sug[] = protHints(m, days, rp.sev);
+    const aiToday = todays.filter((r) => r.source === "ai").length;
+    if (key && m.done_count >= 4 && m.data_days >= 7 && aiToday < 4) {
+      const compact = {
+        ctl: m.ctl, atl: m.atl, tsb: m.tsb, ramp_ctl_7d: m.ramp, yesterday_tss: m.yday_tss, last3_tss: m.last3_tss, weeks: m.weeks.map((w: any) => ({ week: w.ws, min: w.done_min, tss: w.tss, plan_min: w.planned_min })),
+        compliance_14d: m.compliance14, intensity_28d: m.dist28, intensity_7d: m.dist7, decoupling_pct: m.decoupling_avg3, ef_trend_pct: m.ef_trend_pct, race_in_days: m.race_in_days, done_28d: m.done_count,
+      };
+      const sys = `Ти — тренер-аналітик тріатлон-клубу TRITON. За метриками навантаження скоригуй план спортсмена на найближчі дні. Пиши ПРОСТОЮ українською для спортсмена, звертайся на «ви», без англійських слів і службових термінів (не пиши recovery, protected, prot, op тощо; замість них: відновлення, дні, якими керує тренер). Скорочення TSB, CTL, ATL, FTP дозволені. Не називай хвилини тренувань: їх підбирає застосунок. У summary коротко скажи, що саме змінюєш у найближчі дні (які дні й як) і чому. Відповідай ЛИШЕ JSON без markdown: {"summary":"2–3 прості речення українською: що змінюєш і чому","actions":[{"date":"YYYY-MM-DD","op":"scale|easy|recovery|rest|harder|swap","factor":0.5-1.2,"to":"YYYY-MM-DD","reason":"до 120 символів українською, з цифрами"}],"hints":[{"date":"YYYY-MM-DD","advice":"коротка порада щодо захищеного дня"}]}. CTL — фітнес, ATL — втома, TSB=CTL−ATL (форма). TSB < −30: перевтома, потрібне відновлення; −30…−10: робоча втома; > +10 і виконання плану ≥ 80%: можна обережно додати. TSB > +10 означає, що спортсмен СВІЖИЙ і добре виконує план: це привід обережно додати, а не зменшувати. Не збільшуй навантаження, якщо TSB < −10, якщо старт за ≤ 7 днів або даних мало. Максимум один день повного відпочинку. Змінюй лише дні зі списку days з prot=false і rest=false; для prot=true (їх веде тренер) дай лише hints, не actions. op: scale — змінити обсяг у factor разів; easy — інтенсивне тренування зробити легким; recovery — відновлення до 40 хв; rest — день відпочинку; harder — підсилити тренування; swap — поміняти день з днем «to» (потрібен для перенесення важкого тренування). Не вигадуй чисел, яких немає в даних. Якщо зміни не потрібні — actions порожній.`;
+      const usr = JSON.stringify({ athlete: { age: pr?.age ?? null, hold_previous_reverted: hold }, metrics: compact, days: days.map((d) => ({ date: d.date, min: d.min, tss: d.tss, hard: d.hard, rest: d.rest, prot: d.prot, text: d.text || d.names })), rules_proposal: { summary: rp.summary, actions: rp.actions } });
+      const r = await ai(key, model, sys, usr, 900);
+      if (r?.text) {
+        await addTokens(r.tokens);
+        try {
+          const t = r.text; const j = JSON.parse(t.slice(t.indexOf("{"), t.lastIndexOf("}") + 1));
+          const acts = validateActions(j.actions, days, m);
+          acts.forEach((a) => { if (!a.reason || latinish(a.reason)) a.reason = GENERIC_REASON[a.op] || "корекція за навантаженням"; });
+          let sum = String(j.summary || "").trim().slice(0, 420);
+          if (!summaryMatches(sum, acts)) sum = describeSummary(rp.summary, acts);
+          // safety net: with heavy fatigue the plan must get lighter, otherwise the rules win
+          const needLighter = !coversSafety(acts, days, rp.sev) || contradicts(acts, rp.level) || latinish(sum);
+          if (sum.length > 20 && !needLighter) {
+            actions = acts; summary = sum; source = "ai";
+          }
+        } catch { /* keep rules */ }
+      }
+    }
+    if (hold && actions.length) summary += " Раніше зміни AI було скасовано, тому цього разу це лише пропозиції: вони не застосуються самі.";
+    const suggestions = [...proposals(m, prevSug), ...hints];
+    const status = actions.length ? "proposed" : suggestions.length ? "suggested" : "noop";
+    const row = {
+      athlete_id: uid, day: today, trigger: trig, status, source, summary, metrics: { ...m, hold, level: rp.level },
+      actions, changes: [], suggestions, input_hash: hash,
+    };
+    const { data: ins, error: ie } = await admin.from("ai_plan_adjustments").insert(row).select().single();
+    if (ie) { console.error("replan insert", ie.message); return json({ error: "save failed" }, 500); }
+    return json({ ok: true, row: ins });
   }
   return json({ error: "mode" }, 400);
 });

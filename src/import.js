@@ -55,6 +55,12 @@ function npOf(samples,times){
  if(s.length<60)return 0;const roll=[];let a=0;for(let i=0;i<s.length;i++){a+=s[i];if(i>=30)a-=s[i-30];if(i>=29)roll.push(a/30)}return Math.pow(roll.reduce((x,v)=>x+v**4,0)/roll.length,.25)}
 function elevGain(alts){let g=0,ref=null;for(const a of alts){if(!isFinite(a))continue;if(ref==null){ref=a;continue}if(a-ref>=2){g+=a-ref;ref=a}else if(ref-a>=2)ref=a}return g}
 const avgOf=a=>a.length?a.reduce((x,y)=>x+y,0)/a.length:0;
+/* aerobic decoupling (Pa:Hr, %): efficiency (power / HR) of the 1st vs 2nd half of the ride, warm-up skipped. null when the file has no power+HR streams or is < 40 min */
+function decOf(S){const v=S.filter(x=>x&&isFinite(x.t)&&x.pw!=null&&isFinite(x.pw)&&x.pw>=0&&x.pw<3000&&x.hr>40&&x.hr<230);if(v.length<120)return null;
+ v.sort((a,b)=>a.t-b.t);const t0=v[0].t+600,t1=v[v.length-1].t;if(t1-v[0].t<2400)return null;const w=v.filter(x=>x.t>=t0);if(w.length<100)return null;
+ const mid=(t0+t1)/2,A=w.filter(x=>x.t<mid),B=w.filter(x=>x.t>=mid);if(A.length<40||B.length<40)return null;
+ const ef=h=>avgOf(h.map(x=>x.pw))/avgOf(h.map(x=>x.hr));const e1=ef(A),e2=ef(B);if(!(e1>0)||avgOf(A.map(x=>x.pw))<50)return null;
+ const d=(e1-e2)/e1*100;return isFinite(d)?Math.max(-30,Math.min(40,+d.toFixed(1))):null}
 function sportFrom(s){s=String(s||'').toLowerCase();
  if(/swim|плав/.test(s))return 'swim';if(/run|walk|hik|trail|treadmill|бег|біг/.test(s)||s==='9'||s==='running')return 'run';
  if(/bik|cycl|ride|velo|вело|zwift|rouvy|^1$|^2$/.test(s))return 'bike';if(/strength|gym|fitness|training|yoga|workout|weight|cardio|crossfit/.test(s))return 'gym';return ''}
@@ -86,7 +92,7 @@ function parseXmlActivity(text,ext){
  if(!dist&&ext==='tcx'&&lap.td)dist=lap.td;else if(ext==='tcx'&&lap.td)dist=lap.td;
  if(!sport){const v=dur?dist/dur*3.6:0;sport=v>15?'bike':v>3?'run':'bike'}
  return {sport,title:title.trim(),start,dur,elapsed,dist,elev:elevGain(pts.map(p=>p.ele)),hr:avgOf(hrs),hrMax:hrs.length?Math.max(...hrs):(lap.hrMax||0),
-  pow:avgOf(pws),powMax:pws.length?Math.max(...pws):0,np:npOf(pws,pwt.every(isFinite)?pwt:null),cad:avgOf(cad.filter(c=>c>0)),kcal:ext==='tcx'?lap.kc||0:0,device:'',kind:ext}}
+  pow:avgOf(pws),powMax:pws.length?Math.max(...pws):0,np:npOf(pws,pwt.every(isFinite)?pwt:null),cad:avgOf(cad.filter(c=>c>0)),kcal:ext==='tcx'?lap.kc||0:0,device:'',kind:ext,dec:pws.length?decOf(pts.map(p=>({t:p.t/1000,pw:p.pw,hr:p.hr}))):null}}
 /* minimal FIT decoder: file_id(0), session(18), lap(19), record(20); compressed timestamps, developer fields */
 function parseFit(buf){
  const dv=new DataView(buf);const hs=dv.getUint8(0);if(buf.byteLength<12||String.fromCharCode(dv.getUint8(8),dv.getUint8(9),dv.getUint8(10),dv.getUint8(11))!=='.FIT')throw new Error('fit');
@@ -111,17 +117,17 @@ function parseFit(buf){
  const fromRecs=(R,s)=>{const pw=R.filter(r=>r[7]!=null&&r[7]<3000),hr=R.map(r=>r[3]).filter(v=>v!=null&&v>30&&v<240),cad=R.map(r=>r[4]).filter(v=>v!=null&&v>0&&v<250);
   const alt=R.map(r=>r[78]!=null?r[78]/5-500:r[2]!=null?r[2]/5-500:NaN);const ds=R.map(r=>r[5]).filter(v=>v!=null);const ts=R.map(r=>r[253]).filter(v=>v!=null);
   return {pow:avgOf(pw.map(r=>r[7])),powMax:pw.length?Math.max(...pw.map(r=>r[7])):0,np:npOf(pw.map(r=>r[7]),pw.every(r=>r[253]!=null)?pw.map(r=>r[253]):null),hr:avgOf(hr),hrMax:hr.length?Math.max(...hr):0,cad:avgOf(cad),elev:elevGain(alt),
-   dist:ds.length?(ds[ds.length-1]-(s?0:ds[0]))/100:0,t0:ts[0],t1:ts[ts.length-1]}};
+   dist:ds.length?(ds[ds.length-1]-(s?0:ds[0]))/100:0,t0:ts[0],t1:ts[ts.length-1],dec:pw.length?decOf(R.map(r=>({t:r[253],pw:r[7],hr:r[3]}))):null}};
  const list=sessions.filter(s=>s[5]!==3);
  if(!list.length){if(!recs.length)throw new Error('fit-empty');const r=fromRecs(recs,null);const dur=r.t1!=null&&r.t0!=null?r.t1-r.t0:0;
-  return [{sport:'bike',title:'',start:T(r.t0),dur,elapsed:dur,dist:r.dist,elev:r.elev,hr:r.hr,hrMax:r.hrMax,pow:r.pow,powMax:r.powMax,np:r.np,cad:r.cad,kcal:0,device,kind:'fit'}]}
+  return [{sport:'bike',title:'',start:T(r.t0),dur,elapsed:dur,dist:r.dist,elev:r.elev,hr:r.hr,hrMax:r.hrMax,pow:r.pow,powMax:r.powMax,np:r.np,cad:r.cad,kcal:0,device,kind:'fit',dec:r.dec}]}
  return list.map((s,idx)=>{
   const t0=s[2],elapsed=s[7]!=null?s[7]/1000:0,t1=s[253]!=null&&s[253]>t0?s[253]:(t0!=null?t0+elapsed:null);
   const R=t0!=null?recs.filter(r=>r[253]!=null&&r[253]>=t0&&r[253]<=t1):recs;const r=fromRecs(R,s);
   const sport=SP[s[5]]||(s[6]===58||s[6]===6?'bike':'')||sportFrom(String(s[5]))||'bike';
   return {sport,title:'',start:T(t0)||T(r.t0),dur:s[8]!=null?s[8]/1000:elapsed,elapsed,dist:s[9]!=null?s[9]/100:r.dist,elev:s[22]!=null?s[22]:r.elev,
    hr:s[16]||r.hr,hrMax:s[17]||r.hrMax,pow:s[20]||r.pow,powMax:s[21]||r.powMax,np:s[34]||r.np,cad:s[18]||r.cad,kcal:s[11]||0,
-   tss:s[35]!=null?s[35]/10:0,if:s[36]!=null?s[36]/1000:0,device,kind:'fit',idx:list.length>1?idx:null}})}
+   tss:s[35]!=null?s[35]/10:0,if:s[36]!=null?s[36]/1000:0,device,kind:'fit',dec:r.dec,idx:list.length>1?idx:null}})}
 /* ---------- load metrics ---------- */
 function impLthr(p){const f=(p&&p.form)||{};if(+f.lthr)return +f.lthr;if(+f.hrMax)return Math.round(+f.hrMax*.89);return 0}
 function impLoad(a,p){const ftp=+(p.form&&p.form.ftp)||0;const h=(a.dur||0)/3600;const pw=a.np||a.pow;
@@ -185,7 +191,7 @@ function impRow(it,file_path){const a=it.a,L=it.load||{};
  const pace=dist&&(a.sport==='run'||a.sport==='swim')?Math.round(a.sport==='run'?a.dur/dist:a.dur/dist*100):null;
  const r={duration_min:dur,distance:dist,avg_power:a.pow?Math.round(a.pow):null,np:a.np?Math.round(a.np):null,avg_hr:a.hr?Math.round(a.hr):null,max_hr:a.hrMax?Math.round(a.hrMax):null,
   cadence:a.cad&&a.sport!=='swim'?Math.round(a.cad):null,elevation_m:a.elev>=1&&a.sport!=='swim'?Math.round(a.elev):null,max_power:a.powMax?Math.round(a.powMax):null,kcal:a.kcal?Math.round(a.kcal):null,
-  pace_sec:pace,tss:L.tss!=null?L.tss:null,intensity:L.IF||null,started_at:a.start?a.start.toISOString():null,external_id:it.ext,device:a.device||null,file_path:file_path||null,source:'file'};
+  pace_sec:pace,tss:L.tss!=null?L.tss:null,intensity:L.IF||null,started_at:a.start?a.start.toISOString():null,external_id:it.ext,device:a.device||null,decoupling:a.dec!=null?a.dec:null,file_path:file_path||null,source:'file'};
  return r}
 async function impUpload(it){const path=st.me.id+'/'+Date.now()+'_'+it.hash.slice(0,8)+'_'+it.name.replace(/[^\w.\-]+/g,'_').slice(-60);
  const r=await sb.storage.from('activity-files').upload(path,new Blob([it.buf]),{contentType:'application/octet-stream',upsert:false});if(r.error){console.warn(r.error);return null}return path}
@@ -201,7 +207,8 @@ async function impSave(btn){const S=st._imp;await busy(btn,async()=>{
   if(error)throw error;if(data&&data.length){st.logs.push(data[0]);ins++}else skip++}
  st._imp=null;closeAll();render();
  toast(ins+upd?'Імпортовано: '+(ins+upd)+(upd?' (оновлено '+upd+')':'')+(skip?', пропущено дублів: '+skip:''):'Нічого нового: усе вже є в щоденнику',ins+upd?'check':'info');
- if(typeof checkNewAch==='function')checkNewAch()})}
+ if(typeof checkNewAch==='function')checkNewAch();
+ if(ins+upd&&typeof aiRun==='function')aiRun('import')})}
 /* ---------- Android share target (files arrive via the service worker) ---------- */
 async function impConsumeShare(){
  try{const u=new URL(location.href);if(u.searchParams.has('share')){u.searchParams.delete('share');history.replaceState(history.state||{},'',u.pathname+u.search)}}catch(e){}
@@ -242,7 +249,7 @@ SHEETS.logv=id=>{const l=_logv[id];if(!l)return {title:'Тренування',bo
   ['Дистанція',l.distance?(l.sport==='swim'?fmtNum(l.distance)+' м':String(+l.distance).replace('.',',')+' км'):''],['Набір висоти',l.elevation_m?l.elevation_m+' м':''],
   ['Темп',l.pace_sec&&typeof nfFmtTime==='function'?nfFmtTime(l.pace_sec)+(l.sport==='swim'?' /100 м':' /км'):''],['Пульс сер. / макс.',l.avg_hr?l.avg_hr+(l.max_hr?' / '+l.max_hr:'')+' уд/хв':''],
   ['Потужність сер.',l.avg_power?l.avg_power+' Вт'+(l.max_power?' (макс. '+l.max_power+')':''):''],['NP',l.np?l.np+' Вт':''],['Каденс',l.cadence?l.cadence+(l.sport==='run'?' кр/хв':' об/хв'):''],
-  ['Навантаження',l.tss?'TSS '+l.tss+(l.intensity?' · IF '+String(l.intensity).replace('.',','):''):''],['Калорії',l.kcal?l.kcal+' ккал':''],['RPE',l.rpe?l.rpe+' / 10':''],
+  ['Дрейф пульсу',l.decoupling!=null?String(l.decoupling).replace('.',',')+' %'+(l.decoupling>=5?' (аеробна втома)':''):''],['Навантаження',l.tss?'TSS '+l.tss+(l.intensity?' · IF '+String(l.intensity).replace('.',','):''):''],['Калорії',l.kcal?l.kcal+' ккал':''],['RPE',l.rpe?l.rpe+' / 10':''],
   ['Джерело',(SRC_N[l.source]||l.source||'')+(l.device?' · '+l.device:'')],['Коментар',l.note||'']].filter(x=>x[1]);
  return {title:esc(l.title||SPORT[l.sport].n),body:`<div class="stack"><div class="list">${rows.map(x=>`<div class="li"><div class="grow"><div class="t12 ter">${x[0]}</div><div class="t14">${esc(String(x[1]))}</div></div></div>`).join('')}</div>
  ${l.file_path&&(st.coach||l.athlete_id===st.me.id)?`<button class="btn s" onclick="dlFile('${l.file_path}')">${ic('download',18)} Завантажити файл</button>`:''}</div>`}};
@@ -269,7 +276,7 @@ async function stravaConnect(btn){await busy(btn,async()=>{const d=await stravaC
 async function stravaSync(btn,quiet){const run=async()=>{const d=await stravaCall('sync');
  const r=await sb.from('workout_logs').select('*').eq('athlete_id',st.me.id).order('day');if(!r.error)st.logs=r.data;
  st.strava=null;render();if(sheetStack.length)renderSheet();
- toast(d.imported?'Зі Strava додано: '+d.imported:'Нових тренувань у Strava немає',d.imported?'check':'info');if(d.imported&&typeof checkNewAch==='function')checkNewAch()};
+ toast(d.imported?'Зі Strava додано: '+d.imported:'Нових тренувань у Strava немає',d.imported?'check':'info');if(d.imported&&typeof checkNewAch==='function')checkNewAch();if(d.imported&&typeof aiRun==='function')aiRun('import')};
  if(quiet){try{await run()}catch(e){console.warn(e)}}else await busy(btn,run)}
 async function stravaDisconnect(btn){if(!confirm('Відключити Strava? Уже імпортовані тренування залишаться.'))return;await busy(btn,async()=>{await stravaCall('disconnect');st.strava=null;renderSheet();toast('Strava відключено','info')})}
 function impBootActions(){
